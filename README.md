@@ -27,7 +27,7 @@ Fair.
 ## How do I get started then?
 Start an export of your [Google Takeout](https://takeout.google.com) including your Location History. This can take a while, depending on how much rich, warm data Google has siphoned from you, Lugosi-style, over the years.  
 
-Next - and this is only for now - you'll need to git clone my branch of the [Google Takeout Parser library](https://github.com/ryanbateman/google_takeout_parser) and install it as a python module using pip. (Once its changes have been merged into its upstream branch this step should be easier.)  
+Next - and this is only for now - you'll need to ```git clone``` my fork of the [Google Takeout Parser library](https://github.com/ryanbateman/google_takeout_parser) and install it as a python module using pip. (Once its changes have been merged into its upstream branch this step should be easier.)  
 
 You'll then need to clone this repo and put your unzipped takeout data inside a directory named ```takeout```. The takeout folder should be something like ```streetview-collision-detector/takeout/Location History/Semantic Location History/```, inside of which will be subfolders for each year of your location history, with rich, meaty JSON files inside these.  
 
