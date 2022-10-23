@@ -42,7 +42,6 @@ Google's Takeout folder structure seems to have changed over time and could well
 This only checks against what Google considers the 'place' you were visiting, not its surrounding area, so you could miss out on potential hits.  
 And, uh, I'm not a Python developer. Or a developer at all. So, you know, it could all break. (PRs welcomed.)  
 
----
 
 [^1]: The deadly snake, not the [gaming peripheral](https://en.wikipedia.org/wiki/List_of_Razer_products), though I can personally vouch that they're okay as mice go. (Mouses? Meese? Mice? Yeah, mice, probably.)    
 [^2]: The programming language, not a small snake, though having allies in the animal world is never a bad idea, especially if you're the aforementioned hunter. 
