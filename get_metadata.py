@@ -13,7 +13,7 @@ session = requests_cache.CachedSession('maps_cache', expire_after=360)
 
 def checkPlaceVisit(placeVisit: PlaceVisit):
 	# Eliminate the check when the place visit is out of hours
-	if placeVisit.startTime.hour > 17 and placeVisit.startTime.hour < 7:
+	if placeVisit.startTime.hour > 17 and placeVisit.endTime.hour < 7:
 		return
 	# obtain the metadata of the request
 	meta_params = {'key': api_key, 'location': f"{placeVisit.lat},{placeVisit.lng}"}
