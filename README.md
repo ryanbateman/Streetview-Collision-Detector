@@ -6,6 +6,8 @@ This is a series of small Python scripts that are intended to help someone hopin
 
 When it does find that you where somewhere in the same month as the Streetview photo for that place was taken, it lets you know about the 'collision' so that you can jump onto Streetview yourself and see if you can spot yourself. 
 
+![A screenshot showing the script out for a collision](assets/collision.png?raw=true "An example of a collision")
+
 ## Does it work?
 Well, yes and no. Google Streetview photos only show the month they were taken, not the day, so it gives you a better chance to spot yourself, definitely, but it's still not precise. And you'll still need to wander around Streetview to find yourself. But this will at least help target your search somewhat.  
 
