@@ -1,3 +1,12 @@
+# Takeout-specific folders, to prevent someone accidentally commiting their location history. Which would be bad. Very, very bad.
+takeout/
+*.sqlite
+
+# Environment/IDE stuff
+.DS_Store
+.vscode
+*.code-workspace
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
