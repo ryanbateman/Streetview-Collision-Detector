@@ -2,6 +2,9 @@
 takeout/
 *.sqlite
 
+# Personal notes
+TODO.md
+
 # Environment/IDE stuff
 .DS_Store
 .vscode
