@@ -13,7 +13,7 @@ from tqdm.asyncio import tqdm
 meta_base = 'https://maps.googleapis.com/maps/api/streetview/metadata?'
 pic_base = 'https://maps.googleapis.com/maps/api/streetview?'
 api_key = os.environ.get('GMAPS_STATIC_API_KEY')
-max_workers = 100
+max_workers = 1000
 
 def chunkedIterable(iterable, chunk_size):
     it = iter(iterable)
@@ -26,10 +26,13 @@ def chunkedIterable(iterable, chunk_size):
 async def checkAllVisitsForHits(placeVisits: List[PlaceVisit]):
 	# setup request
 	tcp_connection = TCPConnector(limit=max_workers)
-	
+	pbar = tqdm(total = len(placeVisits))
+
 	async with ClientSession(connector=tcp_connection) as session:
-		for placeVisit in chunkedIterable(placeVisits, max_workers):
-			results = await checkChunkForHits(placeVisit, session)
+		for placeVisitChunk in chunkedIterable(placeVisits, max_workers):
+			results = await checkChunkForHits(placeVisitChunk, session)
+			pbar.update(len(placeVisitChunk))	
+		pbar.close()
 		await tcp_connection.close()
 		return 
 
@@ -40,7 +43,7 @@ async def checkChunkForHits(placeVisitsChunk: List[PlaceVisit], session: ClientS
 		# obtain the metadata of the request
 		task = asyncio.ensure_future(checkPlaceVisitForHit(placeVisit, session))
 		tasks.append(task)
-	return await tqdm.gather(*tasks)
+	return await asyncio.gather(*tasks, return_exceptions=True)
 
 async def checkPlaceVisitForHit(placeVisit: PlaceVisit, session: ClientSession):
 	# Eliminate the check when the place visit is out of hours
@@ -60,7 +63,7 @@ async def checkPlaceVisitForHit(placeVisit: PlaceVisit, session: ClientSession):
 			log.error(response_json)
 			return
 		elif response_json['status'] == "ZERO_RESULTS":
-			log.info("No results")
+			log.debug("No results")
 			return
 		elif response_json['status'] == "UNKNOWN_ERROR" or response_json['status'] == "REQUEST_DENIED":
 			log.error(f"Error with request: {response_json['status']}")
