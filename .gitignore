@@ -2,8 +2,11 @@
 takeout/
 *.sqlite
 
-# Personal notes
+# Personal notes & scratch files
 TODO.md
+scratch.py
+heatmap.html
+output.pkl
 
 # Environment/IDE stuff
 .DS_Store

@@ -8,6 +8,5 @@ def getPlaceVisits():
     tp.dispatch_map()
     # to parse with cachew cache https://github.com/karlicoss/cachew
     locations = list(tp.parse())
-
     log.info(f"Number of parsed locations: {len(locations)}")
     return locations
