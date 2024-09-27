@@ -19,7 +19,7 @@ Firstly, you will need to check you have had Location History enabled and that t
 
 You'll also need to get yourself a [Google Maps Static API key](https://developers.google.com/maps/documentation/maps-static/get-api-key) so you'll need to know how to navigate Google's Developer Console.  
 
-You'll also need to know a little Python[^2] and a little git[^3], be comfortable installing a Python module from a cloned repo, have an environment to run it all in, and be able to download your Google Location History from [Google Takeout](https://takeout.google.com/), Google's truly excellent data exfiltration service.  
+You'll also need to know a little Python[^2] and a little git[^3], and be able to download your Google Location History from [Google Takeout](https://takeout.google.com/), Google's truly excellent data exfiltration service.  
 
 ## Hardly seems worth it.
 Fair.  
@@ -27,9 +27,7 @@ Fair.
 ## How do I get started then?
 Start an export of your [Google Takeout](https://takeout.google.com) including your Location History. This can take a while, depending on how much rich, warm data Google has siphoned from you, Lugosi-style, over the years.  
 
-Next - and this is only for now - you'll need to ```git clone``` my fork of the [Google Takeout Parser library](https://github.com/ryanbateman/google_takeout_parser) and install it as a python module using pip. (Once its changes have been merged into its upstream branch this step should be easier.)  
-
-You'll then need to clone this repo and put your unzipped takeout data inside a directory named ```takeout```. The takeout folder should be something like ```streetview-collision-detector/takeout/Location History/Semantic Location History/```, inside of which will be subfolders for each year of your location history, with rich, meaty JSON files inside these.  
+You'll then need to clone this repo (the one you're looking at right now) and put your unzipped takeout data inside a directory named ```takeout```. The takeout folder should be something like ```streetview-collision-detector/takeout/Location History/Semantic Location History/```, inside of which will be subfolders for each year of your location history, with rich, meaty JSON files inside these.  
 
 Once this is set up, you'll need to export the [Google Maps Static API key](https://developers.google.com/maps/documentation/maps-static/get-api-key) you've obtained as an environmental variable.  
 ```export GMAPS_STATIC_API_KEY={your key here}```
