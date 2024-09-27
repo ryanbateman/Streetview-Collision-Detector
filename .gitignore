@@ -6,6 +6,7 @@ takeout/
 TODO.md
 scratch.py
 heatmap.html
+heatmap*.html
 output.pkl
 
 # Environment/IDE stuff
