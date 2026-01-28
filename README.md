@@ -1,4 +1,4 @@
-#This repository is no longer supported/maintained, in large part due to Google changing their Takeout location format regularly.
+# This repository is no longer supported/maintained, in large part due to Google changing their Takeout location format regularly.
 
 # Streetview Collision Detector
 A programmatic attempt to help you find yourself on Google Maps Streetview using your Google Maps Location history.
