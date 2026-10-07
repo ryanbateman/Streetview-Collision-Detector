@@ -1,0 +1,19 @@
+{
+  "timelineObjects": [
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": -339000000,
+          "longitudeE7": 1512000000,
+          "placeId": "ChIJfixture006",
+          "address": "Fixture Street 1, Sydney, Australia",
+          "name": "Southern Hemisphere Fixture"
+        },
+        "duration": {
+          "startTimestamp": "2022-09-10T08:00:00.000Z",
+          "endTimestamp": "2022-09-10T09:45:00.000Z"
+        }
+      }
+    }
+  ]
+}

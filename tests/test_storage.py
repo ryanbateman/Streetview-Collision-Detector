@@ -46,3 +46,14 @@ def test_csv_header_matches_dataclass(tmp_path):
     assert header.split(",")[0] == "placeKey" and header.split(",")[-1] == "url"
     writeCsv(tmp_path / "empty.csv", [], cls=Collision)
     assert (tmp_path / "empty.csv").read_text(encoding="utf-8").strip() == header
+
+
+def test_truncated_last_line_is_skipped_with_warning(tmp_path, caplog):
+    path = tmp_path / "v.jsonl"
+    writeJsonl(path, [makeVisit(), makeVisit(name="Second")])
+    text = path.read_text(encoding="utf-8")
+    path.write_text(text + '{"placeId": "ChIJcut", "na', encoding="utf-8")
+    with caplog.at_level("WARNING"):
+        rows = readJsonl(path, Visit)
+    assert [v.name for v in rows] == ["Cafe", "Second"]
+    assert "unreadable line 3" in caplog.text

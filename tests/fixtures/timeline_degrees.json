@@ -1,0 +1,85 @@
+{
+  "semanticSegments": [
+    {
+      "startTime": "2025-03-01T10:00:00.000+01:00",
+      "endTime": "2025-03-01T12:30:00.000+01:00",
+      "startTimeTimezoneUtcOffsetMinutes": 60,
+      "endTimeTimezoneUtcOffsetMinutes": 60,
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.9,
+        "topCandidate": {
+          "placeId": "ChIJfixture101",
+          "semanticType": "UNKNOWN",
+          "probability": 0.85,
+          "placeLocation": {"latLng": "52.5163°, 13.3777°"}
+        }
+      }
+    },
+    {
+      "startTime": "2025-03-01T12:30:00.000+01:00",
+      "endTime": "2025-03-01T12:55:00.000+01:00",
+      "activity": {
+        "start": {"latLng": "52.5163°, 13.3777°"},
+        "end": {"latLng": "52.5208°, 13.4094°"},
+        "distanceMeters": 2300.0,
+        "topCandidate": {"type": "WALKING", "probability": 0.95}
+      }
+    },
+    {
+      "startTime": "2025-03-01T12:00:00.000+01:00",
+      "endTime": "2025-03-01T14:00:00.000+01:00",
+      "timelinePath": [
+        {"point": "52.5170°, 13.3880°", "time": "2025-03-01T12:40:00.000+01:00"}
+      ]
+    },
+    {
+      "startTime": "2025-03-30T01:30:00.000+01:00",
+      "endTime": "2025-03-30T04:00:00.000+02:00",
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.7,
+        "topCandidate": {
+          "placeId": "ChIJfixture102",
+          "semanticType": "INFERRED_HOME",
+          "probability": 0.6,
+          "placeLocation": "52.5208°, 13.4094°"
+        }
+      }
+    },
+    {
+      "startTime": "2025-04-02T08:00:00.000-04:00",
+      "endTime": "2025-04-02T09:30:00.000-04:00",
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.8,
+        "topCandidate": {
+          "placeId": "ChIJfixture103",
+          "semanticType": "UNKNOWN",
+          "probability": 0.75,
+          "placeLocation": {"latLng": "40.7580°, -73.9855°"}
+        }
+      }
+    },
+    {
+      "startTime": "2025-04-03T08:00:00.000+02:00",
+      "endTime": "2025-04-03T09:00:00.000+02:00",
+      "visit": {
+        "hierarchyLevel": 0,
+        "probability": 0.5,
+        "topCandidate": {
+          "placeId": "ChIJfixture104",
+          "semanticType": "UNKNOWN",
+          "probability": 0.4,
+          "placeLocation": {}
+        }
+      }
+    }
+  ],
+  "rawSignals": [
+    {"position": {"LatLng": "52.5163°, 13.3777°", "timestamp": "2025-03-01T10:05:00.000+01:00"}}
+  ],
+  "userLocationProfile": {
+    "frequentPlaces": [{"placeId": "ChIJfixture102", "placeLocation": "52.5208°, 13.4094°", "label": "HOME"}]
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "timelineObjects": [
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": 525163000,
+          "longitudeE7": 133777000,
+          "placeId": "ChIJfixture001",
+          "address": "Pariser Platz, 10117 Berlin, Germany",
+          "name": "Brandenburg Gate",
+          "sourceInfo": {"deviceTag": 0},
+          "locationConfidence": 91.5
+        },
+        "duration": {
+          "startTimestamp": "2022-08-05T09:00:00.000Z",
+          "endTimestamp": "2022-08-05T11:30:00.000Z"
+        },
+        "placeConfidence": "HIGH_CONFIDENCE",
+        "visitConfidence": 95
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {"latitudeE7": 525163000, "longitudeE7": 133777000},
+        "endLocation": {"latitudeE7": 525208000, "longitudeE7": 134094000},
+        "duration": {
+          "startTimestamp": "2022-08-05T11:30:00.000Z",
+          "endTimestamp": "2022-08-05T11:55:00.000Z"
+        },
+        "activityType": "WALKING"
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": 525208000,
+          "longitudeE7": 134094000,
+          "placeId": "ChIJfixture002",
+          "locationConfidence": 40.0
+        },
+        "duration": {
+          "startTimestamp": "2022-08-12T14:00:00Z",
+          "endTimestamp": "2022-08-12T15:15:00Z"
+        }
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {
+          "placeId": "ChIJfixture003",
+          "address": "Somewhere without coordinates",
+          "locationConfidence": 10.0
+        },
+        "duration": {
+          "startTimestamp": "2022-08-20T10:00:00.000Z",
+          "endTimestamp": "2022-08-20T11:00:00.000Z"
+        },
+        "otherCandidateLocations": []
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": 525075000,
+          "longitudeE7": 133904000,
+          "placeId": "ChIJfixture004",
+          "name": "Checkpoint Charlie"
+        },
+        "duration": {
+          "startTimestamp": "2022-08-25T12:00:00.000Z",
+          "endTimestamp": "2022-08-25T11:00:00.000Z"
+        }
+      }
+    },
+    {
+      "placeVisit": {
+        "location": {
+          "latitudeE7": 525186000,
+          "longitudeE7": 133762000,
+          "placeId": "ChIJfixture005",
+          "address": "Platz der Republik 1, 11011 Berlin, Germany",
+          "name": "Reichstag Building"
+        },
+        "duration": {
+          "startTimestamp": "2022-08-31T22:00:00.000Z",
+          "endTimestamp": "2022-09-01T01:30:00.000Z"
+        }
+      }
+    }
+  ]
+}

@@ -6,7 +6,9 @@ dataclass type hints, so callers never hand-write (de)serialisation.
 import csv
 import dataclasses
 import json
+import logging as log
 from datetime import datetime, timezone
+from functools import cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, TypeVar, get_args, get_type_hints
 
@@ -23,6 +25,11 @@ def _toUtcIso(value: datetime) -> str:
     return value.astimezone(timezone.utc).isoformat()
 
 
+@cache
+def _hintsFor(cls: type) -> dict[str, Any]:
+    return get_type_hints(cls)
+
+
 def toRecord(obj: Any) -> dict[str, Any]:
     """Dataclass instance to a JSON-safe dict."""
     record: dict[str, Any] = {}
@@ -36,7 +43,7 @@ def toRecord(obj: Any) -> dict[str, Any]:
 
 def fromRecord(cls: type[T], record: dict[str, Any]) -> T:
     """Dict (as produced by toRecord) back to a dataclass instance."""
-    hints = get_type_hints(cls)
+    hints = _hintsFor(cls)
     kwargs: dict[str, Any] = {}
     for field in dataclasses.fields(cls):
         value = record.get(field.name)
@@ -55,8 +62,7 @@ def writeJsonl(path: Path | str, rows: Iterable[Any], append: bool = False) -> i
     count = 0
     with path.open("a" if append else "w", encoding="utf-8") as handle:
         for row in rows:
-            handle.write(json.dumps(toRecord(row), ensure_ascii=False))
-            handle.write("\n")
+            handle.write(json.dumps(toRecord(row), ensure_ascii=False) + "\n")
             count += 1
     return count
 
@@ -70,11 +76,21 @@ def iterJsonl(path: Path | str, cls: type[T]) -> Iterator[T]:
     path = Path(path)
     if not path.exists():
         return
+    bad = 0
     with path.open("r", encoding="utf-8") as handle:
-        for line in handle:
+        for lineNumber, line in enumerate(handle, start=1):
             line = line.strip()
-            if line:
-                yield fromRecord(cls, json.loads(line))
+            if not line:
+                continue
+            try:
+                record = json.loads(line)
+            except ValueError:
+                bad += 1
+                log.warning(f"{path}: skipping unreadable line {lineNumber} (interrupted write?)")
+                continue
+            yield fromRecord(cls, record)
+    if bad:
+        log.warning(f"{path}: {bad} unreadable line(s) skipped; affected lookups will be redone")
 
 
 def readJsonl(path: Path | str, cls: type[T]) -> list[T]:
