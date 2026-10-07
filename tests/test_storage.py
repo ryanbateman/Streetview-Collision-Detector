@@ -43,7 +43,7 @@ def test_csv_header_matches_dataclass(tmp_path):
     )
     writeCsv(tmp_path / "c.csv", [collision])
     header = (tmp_path / "c.csv").read_text(encoding="utf-8").splitlines()[0]
-    assert header.split(",")[0] == "placeKey" and header.split(",")[-1] == "url"
+    assert header.split(",") == [f.name for f in __import__("dataclasses").fields(Collision)]
     writeCsv(tmp_path / "empty.csv", [], cls=Collision)
     assert (tmp_path / "empty.csv").read_text(encoding="utf-8").strip() == header
 
