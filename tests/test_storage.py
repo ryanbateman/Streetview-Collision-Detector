@@ -57,3 +57,23 @@ def test_truncated_last_line_is_skipped_with_warning(tmp_path, caplog):
         rows = readJsonl(path, Visit)
     assert [v.name for v in rows] == ["Cafe", "Second"]
     assert "unreadable line 3" in caplog.text
+
+
+def test_missing_fields_from_older_files_take_dataclass_defaults(tmp_path):
+    import json
+    from svcd.models import Candidate
+    path = tmp_path / "old.jsonl"
+    record = {k: v for k, v in json.loads(json.dumps(
+        __import__("svcd.storage", fromlist=["toRecord"]).toRecord(makeVisit()))).items()
+        if k not in ("kind", "semanticType", "importance")}
+    path.write_text(json.dumps(record) + "\n", encoding="utf-8")
+    visit = readJsonl(path, Visit)[0]
+    assert (visit.kind, visit.semanticType, visit.importance) == ("place", None, None)
+    candidate = Candidate(rank=1, placeKey="k", name=None, month="2022-08", lat=1.0, lng=2.0, kind="place",
+                          probability=0.1, coverage=0.2, visibility=0.3, visitCount=1, dwellMinutes=5.0)
+    writeJsonl(path, [candidate])
+    assert readJsonl(path, Candidate)[0].panos == []
+    (tmp_path / "nopanos.jsonl").write_text(
+        json.dumps({k: v for k, v in __import__("svcd.storage", fromlist=["toRecord"]).toRecord(candidate).items()
+                    if k != "panos"}) + "\n", encoding="utf-8")
+    assert readJsonl(tmp_path / "nopanos.jsonl", Candidate)[0].panos == []

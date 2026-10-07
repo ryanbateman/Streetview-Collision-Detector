@@ -46,6 +46,14 @@ def fromRecord(cls: type[T], record: dict[str, Any]) -> T:
     hints = _hintsFor(cls)
     kwargs: dict[str, Any] = {}
     for field in dataclasses.fields(cls):
+        if field.name not in record:
+            # Field added after the file was written: use the dataclass default.
+            if field.default is not dataclasses.MISSING:
+                kwargs[field.name] = field.default
+                continue
+            if field.default_factory is not dataclasses.MISSING:  # type: ignore[misc]
+                kwargs[field.name] = field.default_factory()  # type: ignore[misc]
+                continue
         value = record.get(field.name)
         if value is not None and _isDatetimeHint(hints[field.name]):
             value = datetime.fromisoformat(value)
