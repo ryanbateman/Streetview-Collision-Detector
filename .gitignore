@@ -9,6 +9,12 @@ heatmap.html
 heatmap*.html
 output.pkl
 
+# Pipeline stage outputs and request cache
+data/
+output/
+cache/
+.tmp/
+
 # Environment/IDE stuff
 .DS_Store
 .vscode

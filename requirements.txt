@@ -1,6 +1,5 @@
-aiohttp
-aiohttp_client_cache
-google_takeout_parser
-pandas
-tqdm
-folium
+aiohttp==3.14.4
+aiohttp_client_cache[sqlite]==0.14.3
+pandas==3.0.6
+folium==0.20.0
+tqdm==4.70.1
