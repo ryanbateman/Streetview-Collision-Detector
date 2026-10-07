@@ -3,15 +3,17 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from svcd.match import (
+    buildCandidates,
     buildPanoUrl,
     dwellInMonth,
     findCollisions,
     haversineM,
     monthsSpanned,
     rankCollisions,
-    scoreCollision,
 )
-from svcd.models import Collision, PanoLookup, Place, Visit
+from svcd.models import KIND_PLACE, KIND_WALKING, Collision, PanoLookup, Place, Visit
+from svcd.places import buildPlaces
+from svcd.scoring import coverage, proximity, visibility
 
 UTC = timezone.utc
 LAT, LNG = 52.48568, 13.37656
@@ -42,9 +44,11 @@ def makeLookup(
                       date=date, panoLat=panoLat, panoLng=panoLng)
 
 
-def makeCollision(placeKey: str, month: str, score: float) -> Collision:
-    return Collision(placeKey=placeKey, name=None, month=month, panoId="p", panoDate=month, panoLat=0.0,
-                     panoLng=0.0, distanceM=0.0, visitCount=1, dwellMinutes=1.0, score=score, url="u")
+def makeCollision(placeKey: str, month: str, probability: float, panoId: str = "p",
+                  distanceM: float = 0.0, name: str | None = None) -> Collision:
+    return Collision(placeKey=placeKey, name=name, month=month, panoId=panoId, panoDate=month, panoLat=1.0,
+                     panoLng=2.0, distanceM=distanceM, visitCount=1, dwellMinutes=1.0, score=probability,
+                     url=f"u-{panoId}", coverage=0.5, visibility=0.3, proximity=1.0, probability=probability)
 
 
 # monthsSpanned
@@ -120,7 +124,12 @@ def testTwoVisitsInPanoMonthGiveOneCollision():
     assert c.visitCount == 2
     assert c.dwellMinutes == pytest.approx(90)
     assert c.distanceM == pytest.approx(haversineM(LAT, LNG, LAT + 0.0001, LNG))
-    assert c.score == pytest.approx(scoreCollision(90, 2, c.distanceM))
+    assert c.coverage == pytest.approx(coverage(visits, "2022-08"))
+    assert c.coverage == pytest.approx(1.5 / (12 * 31))
+    assert c.visibility == pytest.approx(visibility(visits, "Cafe"))
+    assert c.proximity == pytest.approx(proximity(c.distanceM))
+    assert c.probability == pytest.approx(c.coverage * c.visibility * c.proximity)
+    assert c.score == c.probability
     assert c.url == buildPanoUrl("pano-a", LAT + 0.0001, LNG)
 
 
@@ -134,8 +143,11 @@ def testMonthCrossingVisitMatchesBothMonths():
     lookups = [makeLookup(panoId="aug", date="2022-08"), makeLookup(panoId="sep", date="2022-09")]
     byPano = {c.panoId: c for c in findCollisions(visits, [makePlace()], lookups)}
     assert set(byPano) == {"aug", "sep"}
-    assert byPano["aug"].dwellMinutes == pytest.approx(120)
-    assert byPano["sep"].dwellMinutes == pytest.approx(90)
+    # 22:00-01:30 UTC is night at lng 13.4, so neither month gets daylight dwell, only night weight.
+    assert byPano["aug"].dwellMinutes == pytest.approx(0)
+    assert byPano["sep"].dwellMinutes == pytest.approx(0)
+    assert byPano["aug"].coverage == pytest.approx(0.05 * 2 / (12 * 31))
+    assert byPano["sep"].coverage == pytest.approx(0.05 * 1.5 / (12 * 30))
 
 
 def testDuplicatePanoIdCollapsesKeepingClosest():
@@ -187,9 +199,27 @@ def testVisitsAtOtherPlacesDoNotMatch():
     assert findCollisions(visits, [makePlace()], [makeLookup()]) == []
 
 
-# ranking and scoring
+def testDaylightDwellCountsOnlyDaylight():
+    # 05:00-09:00 UTC at lng 0: solar 07:00 splits it into 2 h night and 2 h daylight.
+    visits = [makeVisit(dt(2022, 8, 5, 5), dt(2022, 8, 5, 9), lng=0.0)]
+    place = makePlace(lng=0.0)
+    collisions = findCollisions(visits, [place], [makeLookup(panoLng=0.0)])
+    assert collisions[0].dwellMinutes == pytest.approx(120)
 
-def testRankCollisionsOrdersByScoreThenKeyThenMonth():
+
+def testWalkingVisitsGetPathVisibility():
+    visits = [Visit(placeId=None, name=None, address=None, lat=LAT, lng=LNG, start=dt(2022, 8, 5, 10),
+                    end=dt(2022, 8, 5, 10, 1), source="timeline", kind=KIND_WALKING)]
+    [place] = buildPlaces(visits)
+    assert place.key.startswith("path:")
+    collisions = findCollisions(visits, [place], [makeLookup(placeKey=place.key)])
+    assert collisions[0].placeKey == place.key
+    assert collisions[0].visibility == pytest.approx(0.9)
+
+
+# ranking
+
+def testRankCollisionsOrdersByProbabilityThenKeyThenMonth():
     a = makeCollision("b", "2022-01", 1.0)
     b = makeCollision("a", "2022-02", 1.0)
     c = makeCollision("a", "2022-01", 1.0)
@@ -197,11 +227,15 @@ def testRankCollisionsOrdersByScoreThenKeyThenMonth():
     assert rankCollisions([a, b, c, d]) == [d, c, b, a]
 
 
-def testScoreMonotonicity():
-    assert scoreCollision(120, 1, 10) > scoreCollision(30, 1, 10)
-    assert scoreCollision(60, 1, 10) > scoreCollision(60, 1, 50)
-    assert scoreCollision(60, 3, 10) > scoreCollision(60, 1, 10)
-    assert scoreCollision(0, 0, 0) == 0
+def testProbabilityGrowsWithDwellAndShrinksWithDistance():
+    short = [makeVisit(dt(2022, 8, 5, 10), dt(2022, 8, 5, 11))]
+    long = [makeVisit(dt(2022, 8, 5, 10), dt(2022, 8, 5, 14))]
+    near = makeLookup(panoLat=LAT + 0.0001)
+    far = makeLookup(panoLat=LAT + 0.0005)
+    shortNear = findCollisions(short, [makePlace()], [near])[0].probability
+    longNear = findCollisions(long, [makePlace()], [near])[0].probability
+    shortFar = findCollisions(short, [makePlace()], [far])[0].probability
+    assert longNear > shortNear > shortFar > 0
 
 
 def testVisitEndingExactlyAtMonthStartDoesNotMatchThatMonth():
@@ -209,4 +243,81 @@ def testVisitEndingExactlyAtMonthStartDoesNotMatchThatMonth():
     collisions = findCollisions(visits, [makePlace()], [makeLookup(date="2022-09")])
     assert collisions == []
     collisions = findCollisions(visits, [makePlace()], [makeLookup(date="2022-08")])
-    assert len(collisions) == 1 and collisions[0].dwellMinutes == pytest.approx(120)
+    assert len(collisions) == 1 and collisions[0].dwellMinutes == pytest.approx(0)  # night at lng 13.4
+    assert collisions[0].probability > 0
+
+
+# buildCandidates
+
+def testBuildCandidatesMergesPanosOfOnePlaceMonth():
+    place = Place(key="a", placeId=None, name="Park", lat=52.5, lng=13.4, visitCount=2, kind=KIND_WALKING)
+    weak = makeCollision("a", "2022-08", 0.2, panoId="weak", distanceM=30.0)
+    strong = makeCollision("a", "2022-08", 0.5, panoId="strong", distanceM=10.0)
+    candidates = buildCandidates([weak, strong], [place])
+    assert len(candidates) == 1
+    c = candidates[0]
+    assert c.rank == 1
+    assert (c.placeKey, c.month, c.name) == ("a", "2022-08", "Park")
+    assert (c.lat, c.lng, c.kind) == (52.5, 13.4, KIND_WALKING)
+    assert c.probability == pytest.approx(0.5)  # the best panorama only; one month is one drive
+    assert (c.coverage, c.visibility, c.visitCount, c.dwellMinutes) == (0.5, 0.3, 1, 1.0)
+    assert [p["panoId"] for p in c.panos] == ["strong", "weak"]
+    assert c.panos[0] == {"panoId": "strong", "date": "2022-08", "url": "u-strong", "lat": 1.0, "lng": 2.0,
+                          "distanceM": 10.0, "probability": 0.5}
+
+
+def testBuildCandidatesRanksByProbabilityThenKeyThenMonth():
+    places = [Place(k, None, None, 0.0, 0.0, 1) for k in ("a", "b", "z")]
+    collisions = [
+        makeCollision("b", "2022-01", 0.1),
+        makeCollision("a", "2022-02", 0.1),
+        makeCollision("a", "2022-01", 0.1),
+        makeCollision("z", "2020-01", 0.3, panoId="p1"),
+        makeCollision("z", "2020-01", 0.3, panoId="p2"),
+    ]
+    candidates = buildCandidates(collisions, places)
+    assert [(c.rank, c.placeKey, c.month) for c in candidates] == [
+        (1, "z", "2020-01"), (2, "a", "2022-01"), (3, "a", "2022-02"), (4, "b", "2022-01"),
+    ]
+    assert candidates[0].probability == pytest.approx(0.3)
+
+
+def testBuildCandidatesWithoutPlace():
+    collision = makeCollision("orphan", "2022-08", 0.4, name="Kiosk")
+    candidates = buildCandidates([collision], [])
+    assert len(candidates) == 1
+    c = candidates[0]
+    assert (c.placeKey, c.name, c.kind, c.rank) == ("orphan", "Kiosk", KIND_PLACE, 1)
+    assert (c.lat, c.lng) == (1.0, 2.0)
+    assert c.probability == pytest.approx(0.4)
+
+
+def testBuildCandidatesCountsOnlyTheNearestPanoOfAMonth():
+    def pano(panoId: str, distanceM: float) -> Collision:
+        p = 0.1 * 0.5 * proximity(distanceM)
+        return Collision(placeKey="a", name=None, month="2022-08", panoId=panoId, panoDate="2022-08", panoLat=1.0,
+                         panoLng=2.0, distanceM=distanceM, visitCount=1, dwellMinutes=1.0, score=p,
+                         url=f"u-{panoId}", coverage=0.1, visibility=0.5, proximity=proximity(distanceM),
+                         probability=p)
+
+    far, near = pano("far", 80.0), pano("near", 0.0)
+    [c] = buildCandidates([far, near], [])
+    assert c.probability == pytest.approx(0.05)
+    assert c.probability == pytest.approx(c.coverage * c.visibility * max(near.proximity, far.proximity))
+    assert [p["panoId"] for p in c.panos] == ["near", "far"]
+    assert c.panos[1]["probability"] == pytest.approx(0.05 * proximity(80.0))
+
+
+def testBuildCandidatesEmpty():
+    assert buildCandidates([], []) == []
+
+
+def testFindCollisionsFeedBuildCandidates():
+    visits = [makeVisit(dt(2022, 8, 5, 10), dt(2022, 8, 5, 12))]
+    lookups = [makeLookup(panoId="a", panoLat=LAT + 0.0001), makeLookup(panoId="b", panoLat=LAT - 0.0002)]
+    collisions = findCollisions(visits, [makePlace()], lookups)
+    candidates = buildCandidates(collisions, [makePlace()])
+    assert len(candidates) == 1
+    assert candidates[0].probability == pytest.approx(max(c.probability for c in collisions))
+    assert candidates[0].dwellMinutes == pytest.approx(120)
+    assert [p["panoId"] for p in candidates[0].panos] == ["a", "b"]

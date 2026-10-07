@@ -1,0 +1,22 @@
+<button type="button" id="svcd-toggle" aria-controls="svcd-drawer" aria-expanded="false">List (__SVCD_COUNT__)</button>
+<aside id="svcd-drawer" aria-label="Candidates">
+  <header>
+    <div class="svcd-head-row">
+      <h1 id="svcd-count">__SVCD_COUNT_TEXT__</h1>
+      <button type="button" class="svcd-btn" id="svcd-hide" aria-controls="svcd-drawer">Hide</button>
+    </div>
+    <p class="svcd-sub" id="svcd-status">Ranked by the chance that a Street View camera caught you.</p>
+    <div class="svcd-legend" aria-label="Marker colours">
+      <span><i class="svcd-b0"></i>top third</span>
+      <span><i class="svcd-b1"></i>middle third</span>
+      <span><i class="svcd-b2"></i>bottom third</span>
+    </div>
+    <input type="search" id="svcd-filter" placeholder="Filter by name or month" aria-label="Filter by name or month" autocomplete="off">
+  </header>
+  <ul id="svcd-list">__SVCD_EMPTY__</ul>
+  <nav class="svcd-pager" aria-label="Pages">
+    <button type="button" id="svcd-prev">Prev</button>
+    <span id="svcd-page" aria-live="polite">Page 1 of 1</span>
+    <button type="button" id="svcd-next">Next</button>
+  </nav>
+</aside>

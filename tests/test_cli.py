@@ -4,7 +4,7 @@ import pytest
 from aioresponses import aioresponses
 
 from svcd import cli
-from svcd.models import PanoLookup, SamplePoint
+from svcd.models import Candidate, PanoLookup, SamplePoint
 from svcd.storage import readJsonl
 from svcd.streetview import META_URL
 
@@ -36,11 +36,16 @@ def test_run_all_end_to_end_on_fixtures(tmp_path, fixturesDir, monkeypatch):
     assert (data / "visits.jsonl").exists() and (data / "places.jsonl").exists()
     lookups = readJsonl(data / "panos.jsonl", PanoLookup)
     assert lookups and all(lookup.status == "OK" for lookup in lookups)
-    collisions = (tmp_path / "out" / "collisions.csv").read_text(encoding="utf-8").splitlines()
-    assert len(collisions) >= 2, "expected a header plus at least one collision for 2022-08"
+    candidates = (tmp_path / "out" / "candidates.csv").read_text(encoding="utf-8").splitlines()
+    assert len(candidates) >= 2, "expected a header plus at least one candidate for 2022-08"
+    assert candidates[0].startswith("rank,")
     mapHtml = (tmp_path / "out" / "map.html").read_text(encoding="utf-8")
     assert "map_action=pano&pano=FIXTUREPANO" in mapHtml
-    assert "FIXTUREPANO" in (tmp_path / "out" / "collisions.html").read_text(encoding="utf-8")
+    assert "Show on map" in mapHtml
+    assert "FIXTUREPANO" in (tmp_path / "out" / "candidates.html").read_text(encoding="utf-8")
+    ranked = readJsonl(tmp_path / "data" / "candidates.jsonl", Candidate)
+    assert [c.rank for c in ranked] == list(range(1, len(ranked) + 1))
+    assert all(a.probability >= b.probability for a, b in zip(ranked, ranked[1:]))
 
 
 def test_lookup_resumes_and_skips_done_points(tmp_path, fixturesDir, monkeypatch):

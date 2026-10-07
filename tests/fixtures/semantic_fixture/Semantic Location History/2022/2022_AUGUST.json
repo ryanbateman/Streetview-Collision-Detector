@@ -8,7 +8,9 @@
           "placeId": "ChIJfixture001",
           "address": "Pariser Platz, 10117 Berlin, Germany",
           "name": "Brandenburg Gate",
-          "sourceInfo": {"deviceTag": 0},
+          "sourceInfo": {
+            "deviceTag": 0
+          },
           "locationConfidence": 91.5
         },
         "duration": {
@@ -21,8 +23,14 @@
     },
     {
       "activitySegment": {
-        "startLocation": {"latitudeE7": 525163000, "longitudeE7": 133777000},
-        "endLocation": {"latitudeE7": 525208000, "longitudeE7": 134094000},
+        "startLocation": {
+          "latitudeE7": 525163000,
+          "longitudeE7": 133777000
+        },
+        "endLocation": {
+          "latitudeE7": 525208000,
+          "longitudeE7": 134094000
+        },
         "duration": {
           "startTimestamp": "2022-08-05T11:30:00.000Z",
           "endTimestamp": "2022-08-05T11:55:00.000Z"
@@ -36,12 +44,27 @@
           "latitudeE7": 525208000,
           "longitudeE7": 134094000,
           "placeId": "ChIJfixture002",
-          "locationConfidence": 40.0
+          "locationConfidence": 40.0,
+          "semanticType": "TYPE_HOME"
         },
         "duration": {
           "startTimestamp": "2022-08-12T14:00:00Z",
           "endTimestamp": "2022-08-12T15:15:00Z"
-        }
+        },
+        "placeVisitImportance": "MAIN"
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {
+          "latitudeE7": 525208000,
+          "longitudeE7": 134094000
+        },
+        "endLocation": {
+          "latitudeE7": 525200000,
+          "longitudeE7": 134000000
+        },
+        "activityType": "WALKING"
       }
     },
     {
@@ -79,12 +102,14 @@
           "longitudeE7": 133762000,
           "placeId": "ChIJfixture005",
           "address": "Platz der Republik 1, 11011 Berlin, Germany",
-          "name": "Reichstag Building"
+          "name": "Reichstag Building",
+          "semanticType": "TYPE_WORK"
         },
         "duration": {
           "startTimestamp": "2022-08-31T22:00:00.000Z",
           "endTimestamp": "2022-09-01T01:30:00.000Z"
-        }
+        },
+        "placeVisitImportance": "TRANSITIONAL"
       }
     }
   ]

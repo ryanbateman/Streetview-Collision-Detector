@@ -7,11 +7,157 @@
           "longitudeE7": 1512000000,
           "placeId": "ChIJfixture006",
           "address": "Fixture Street 1, Sydney, Australia",
-          "name": "Southern Hemisphere Fixture"
+          "name": "Southern Hemisphere Fixture",
+          "semanticType": "TYPE_SEARCHED_ADDRESS"
         },
         "duration": {
           "startTimestamp": "2022-09-10T08:00:00.000Z",
           "endTimestamp": "2022-09-10T09:45:00.000Z"
+        },
+        "placeVisitImportance": "MAIN"
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {
+          "latitudeE7": -339000000,
+          "longitudeE7": 1512000000
+        },
+        "endLocation": {
+          "latitudeE7": -338800000,
+          "longitudeE7": 1512100000
+        },
+        "duration": {
+          "startTimestamp": "2022-09-10T10:00:00.000Z",
+          "endTimestamp": "2022-09-10T10:20:00.000Z"
+        },
+        "distance": 1200,
+        "activityType": "WALKING",
+        "waypointPath": {
+          "waypoints": [
+            {
+              "latE7": -339000000,
+              "lngE7": 1512000000
+            },
+            {
+              "latE7": -338800000,
+              "lngE7": 1512100000
+            }
+          ]
+        },
+        "simplifiedRawPath": {
+          "points": [
+            {
+              "latE7": -339000000,
+              "lngE7": 1512000000,
+              "timestamp": "2022-09-10T10:00:00Z"
+            },
+            {
+              "latE7": -338900000,
+              "lngE7": 1512050000,
+              "timestamp": "2022-09-10T10:05:00Z"
+            },
+            {
+              "latE7": -338800000,
+              "lngE7": 1512100000,
+              "timestamp": "2022-09-10T10:12:00Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {
+          "latitudeE7": -338800000,
+          "longitudeE7": 1512100000
+        },
+        "endLocation": {
+          "latitudeE7": -338600000,
+          "longitudeE7": 1512200000
+        },
+        "duration": {
+          "startTimestamp": "2022-09-10T11:00:00.000Z",
+          "endTimestamp": "2022-09-10T11:10:00.000Z"
+        },
+        "activityType": "RUNNING",
+        "waypointPath": {
+          "waypoints": [
+            {
+              "latE7": -338800000,
+              "lngE7": 1512100000
+            },
+            {
+              "latE7": -338700000,
+              "lngE7": 1512150000
+            },
+            {
+              "latE7": -338600000,
+              "lngE7": 1512200000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {
+          "latitudeE7": -338600000,
+          "longitudeE7": 1512200000
+        },
+        "endLocation": {
+          "latitudeE7": -338400000,
+          "longitudeE7": 1512300000
+        },
+        "duration": {
+          "startTimestamp": "2022-09-10T12:00:00.000Z",
+          "endTimestamp": "2022-09-10T12:30:00.000Z"
+        },
+        "activityType": "CYCLING"
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {
+          "latitudeE7": -338400000,
+          "longitudeE7": 1512300000
+        },
+        "endLocation": {
+          "latitudeE7": -337000000,
+          "longitudeE7": 1513000000
+        },
+        "duration": {
+          "startTimestamp": "2022-09-10T13:00:00.000Z",
+          "endTimestamp": "2022-09-10T13:40:00.000Z"
+        },
+        "activityType": "IN_TRAIN",
+        "waypointPath": {
+          "waypoints": [
+            {
+              "latE7": -338400000,
+              "lngE7": 1512300000
+            },
+            {
+              "latE7": -337000000,
+              "lngE7": 1513000000
+            }
+          ]
+        }
+      }
+    },
+    {
+      "activitySegment": {
+        "startLocation": {
+          "latitudeE7": -337000000,
+          "longitudeE7": 1513000000
+        },
+        "endLocation": {
+          "latitudeE7": -336900000,
+          "longitudeE7": 1513100000
+        },
+        "duration": {
+          "startTimestamp": "2022-09-10T14:00:00.000Z",
+          "endTimestamp": "2022-09-10T14:10:00.000Z"
         }
       }
     }

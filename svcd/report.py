@@ -1,30 +1,52 @@
-"""MAP stage: render ranked collisions as CSV, a standalone HTML table and a folium map."""
+"""MAP stage: render ranked candidates as CSV, a standalone HTML table and a folium map.
+
+The map page is built from folium (map, tile layers, marker cluster, heat layer, layer control)
+plus a side drawer whose markup, CSS and JS live in svcd/templates and are inlined into the
+saved file, so the output stays a single standalone HTML page.
+"""
+import csv
 import html
+import json
 import logging as log
+import math
 import warnings
 from pathlib import Path
+from typing import Any
 
 import folium
+from branca.element import MacroElement
 from folium import plugins
 from folium.plugins import HeatMap
+from folium.template import Template
 
-from svcd.match import rankCollisions
-from svcd.models import Collision
-from svcd.storage import writeCsv
+from svcd.models import Candidate
 
 DEFAULT_CENTRE = [52.52, 13.405]
 DEFAULT_ZOOM = 5
 DEFAULT_TILES = "Esri.WorldStreetMap"
+TEMPLATES = Path(__file__).parent / "templates"
+
+CSV_COLUMNS = [
+    "rank", "placeKey", "name", "month", "lat", "lng", "kind", "probability", "oneIn", "coverage",
+    "visibility", "visitCount", "dwellMinutes", "panoCount", "panoUrls",
+]
 
 _PAGE_STYLE = """
-body { font-family: system-ui, sans-serif; margin: 16px; color: #222; }
+body { font-family: system-ui, sans-serif; margin: 16px; color: #222; background: #fff; }
 table { border-collapse: collapse; width: 100%; }
-th, td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+th, td { border-bottom: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
 th { background: #f4f4f4; cursor: pointer; user-select: none; }
 td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.links a { margin-right: 8px; }
+@media (prefers-color-scheme: dark) {
+  body { color: #e6e9ec; background: #1d2126; }
+  th { background: #262b31; }
+  th, td { border-color: #363c44; }
+  a { color: #7fb2ff; }
+}
 """
 
-# Click a header to re-sort; rows arrive pre-sorted by score.
+# Click a header to re-sort; rows arrive pre-sorted by rank.
 _SORT_SCRIPT = """
 document.querySelectorAll("th").forEach(function (th, col) {
   th.addEventListener("click", function () {
@@ -44,11 +66,33 @@ document.querySelectorAll("th").forEach(function (th, col) {
 });
 """
 
-_COLUMNS = ["rank", "name", "month", "panoDate", "visitCount", "dwellMinutes", "distanceM", "link"]
+_TABLE_HEADERS = ["rank", "name", "month", "odds", "visits", "daylight dwell (min)", "panoramas"]
 
 
-def _displayName(collision: Collision) -> str:
-    return collision.name or collision.placeKey
+def oneIn(probability: float) -> str:
+    """Probability as plain odds: "1 in 12"; N above 100 is rounded to 2 significant figures.
+
+    From 0.5 up, "1 in N" stops being informative, so it is a percentage instead: "50%", "90%".
+    """
+    if not probability or probability <= 0 or math.isnan(probability):
+        return "very unlikely"
+    if probability >= 0.5:
+        return f"{round(min(probability, 1.0) * 100)}%"
+    n = 1.0 / probability
+    if n > 100:
+        digits = math.floor(math.log10(n)) + 1
+        n = round(n, 2 - digits)
+    return f"1 in {max(2, int(round(n))):,}"
+
+
+def oddsText(probability: float) -> str:
+    """oneIn with "about" in front: "about 1 in 12", "about 50%", or "very unlikely"."""
+    text = oneIn(probability)
+    return text if text == "very unlikely" else f"about {text}"
+
+
+def _displayName(candidate: Candidate) -> str:
+    return candidate.name or candidate.placeKey
 
 
 def _safeText(text: str) -> str:
@@ -57,83 +101,187 @@ def _safeText(text: str) -> str:
     return html.escape(text, quote=True).replace("`", "&#96;").replace("$", "&#36;")
 
 
-def _anchor(url: str, escapeAmpersands: bool = True) -> str:
-    """Panorama link. The map popup keeps raw '&' (browsers accept it) so the URL stays greppable."""
-    href = html.escape(url, quote=True) if escapeAmpersands else url.replace('"', "%22").replace("<", "%3C")
-    return f'<a href="{href}" target="_blank" rel="noopener">Open panorama</a>'
+def _safeUrl(url: Any) -> str | None:
+    """Only https URLs become links; anything else (javascript:, data:, http:) is dropped."""
+    return url if isinstance(url, str) and url.startswith("https://") else None
 
 
-def _tableRow(rank: int, c: Collision) -> str:
+def _finite(value: Any, default: float = 0.0) -> float:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    return number if math.isfinite(number) else default
+
+
+def _sortedPanos(candidate: Candidate) -> list[dict[str, Any]]:
+    """Best panorama (highest probability) first."""
+    return sorted(candidate.panos or [], key=lambda p: -_finite(p.get("probability")))
+
+
+def _ranked(candidates: list[Candidate]) -> list[Candidate]:
+    return sorted(candidates, key=lambda c: c.rank)
+
+
+# ---------------------------------------------------------------- table
+
+def _csvRow(c: Candidate) -> list[Any]:
+    panos = _sortedPanos(c)
+    return [
+        c.rank, c.placeKey, c.name or "", c.month, c.lat, c.lng, c.kind, c.probability, oneIn(c.probability),
+        c.coverage, c.visibility, c.visitCount, c.dwellMinutes, len(panos),
+        " ".join(str(p.get("url") or "") for p in panos if p.get("url")),
+    ]
+
+
+def _tableRow(c: Candidate) -> str:
+    links = []
+    for p in _sortedPanos(c):
+        url = _safeUrl(p.get("url"))
+        if url:
+            links.append(f'<a href="{html.escape(url, quote=True)}" target="_blank" rel="noopener">Open</a>')
     cells = [
-        f'<td class="num">{rank}</td>',
-        f"<td>{html.escape(_displayName(c))}</td>",
-        f"<td>{html.escape(c.month)}</td>",
-        f"<td>{html.escape(c.panoDate)}</td>",
+        f'<td class="num">{c.rank}</td>',
+        f"<td>{_safeText(_displayName(c))}</td>",
+        f"<td>{_safeText(c.month)}</td>",
+        f'<td data-v="{c.rank}">{_safeText(oddsText(c.probability))}</td>',
         f'<td class="num">{c.visitCount}</td>',
         f'<td class="num">{round(c.dwellMinutes)}</td>',
-        f'<td class="num">{round(c.distanceM)}</td>',
-        f'<td data-v="{rank}">{_anchor(c.url)}</td>',
+        f'<td class="links" data-v="{len(links)}">{" ".join(links)}</td>',
     ]
     return "<tr>" + "".join(cells) + "</tr>"
 
 
-def _renderHtml(ranked: list[Collision]) -> str:
+def _renderHtml(ranked: list[Candidate]) -> str:
     if ranked:
-        header = "".join(f"<th>{name}</th>" for name in _COLUMNS)
-        rows = "\n".join(_tableRow(i, c) for i, c in enumerate(ranked, start=1))
+        header = "".join(f"<th>{name}</th>" for name in _TABLE_HEADERS)
+        rows = "\n".join(_tableRow(c) for c in ranked)
         body = (
-            f"<p>{len(ranked)} collisions, ranked by score.</p>\n"
+            f"<p>{len(ranked)} candidates, ranked by the chance that a Street View camera caught you.</p>\n"
             f"<table>\n<thead><tr>{header}</tr></thead>\n<tbody>\n{rows}\n</tbody>\n</table>\n"
             f"<script>{_SORT_SCRIPT}</script>"
         )
     else:
-        body = "<p>No collisions found.</p>"
+        body = "<p>No candidates found.</p>"
     return (
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
         "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
-        f"<title>Street View Collisions</title>\n<style>{_PAGE_STYLE}</style>\n</head>\n"
-        f"<body>\n<h1>Street View Collisions</h1>\n{body}\n</body>\n</html>\n"
+        f"<title>Street View Candidates</title>\n<style>{_PAGE_STYLE}</style>\n</head>\n"
+        f"<body>\n<h1>Street View Candidates</h1>\n{body}\n</body>\n</html>\n"
     )
 
 
-def writeTable(collisions: list[Collision], csvPath: Path, htmlPath: Path) -> None:
-    """Write the ranked collisions as CSV and as a standalone HTML table."""
-    ranked = rankCollisions(collisions)
-    writeCsv(csvPath, ranked, cls=Collision)
-    htmlPath = Path(htmlPath)
+def writeTable(candidates: list[Candidate], csvPath: Path, htmlPath: Path) -> None:
+    """Write the ranked candidates as CSV and as a standalone sortable HTML table."""
+    ranked = _ranked(candidates)
+    csvPath, htmlPath = Path(csvPath), Path(htmlPath)
+    csvPath.parent.mkdir(parents=True, exist_ok=True)
+    with csvPath.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(CSV_COLUMNS)
+        writer.writerows(_csvRow(c) for c in ranked)
     htmlPath.parent.mkdir(parents=True, exist_ok=True)
     htmlPath.write_text(_renderHtml(ranked), encoding="utf-8")
-    log.info(f"Wrote {len(ranked)} collisions to {csvPath} and {htmlPath}")
+    log.info(f"Wrote {len(ranked)} candidates to {csvPath} and {htmlPath}")
 
 
-def _popupHtml(c: Collision) -> str:
-    return (
-        f"<b>{_safeText(_displayName(c))}</b><br/>"
-        f"Month: {html.escape(c.month)}<br/>"
-        f"Visits: {c.visitCount}<br/>"
-        f"Dwell: {round(c.dwellMinutes)} min<br/>"
-        f"Distance: {round(c.distanceM)} m<br/>"
-        f"{_anchor(c.url, escapeAmpersands=False)}"
-    )
+# ---------------------------------------------------------------- map
 
-
-def _heatWeights(collisions: list[Collision]) -> list[float]:
-    """Scores normalised to 0.1..1.0 so the weakest collision still shows; all-equal scores map to 1.0."""
-    scores = [c.score for c in collisions]
+def _heatWeights(candidates: list[Candidate]) -> list[float]:
+    """Probabilities normalised to 0.1..1.0 so the weakest candidate still shows; all-equal maps to 1.0."""
+    scores = [c.probability for c in candidates]
     low, high = min(scores), max(scores)
     if high - low <= 1e-12:
         return [1.0] * len(scores)
     return [0.1 + 0.9 * (s - low) / (high - low) for s in scores]
 
 
-def buildMap(collisions: list[Collision], path: Path) -> None:
-    """Folium map with a marker cluster (one marker per collision) and a score heatmap."""
-    collisions = list(collisions)
-    if collisions:
-        centre = [
-            sum(c.panoLat for c in collisions) / len(collisions),
-            sum(c.panoLng for c in collisions) / len(collisions),
-        ]
+def _panoRecord(p: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "panoId": str(p.get("panoId") or ""),
+        "date": str(p.get("date") or ""),
+        "url": _safeUrl(p.get("url")),
+        "lat": _finite(p.get("lat")),
+        "lng": _finite(p.get("lng")),
+        "distanceM": _finite(p.get("distanceM")),
+        "probability": _finite(p.get("probability")),
+    }
+
+
+def _candidateRecord(c: Candidate) -> dict[str, Any]:
+    return {
+        "rank": c.rank,
+        "placeKey": c.placeKey,
+        "name": c.name,
+        "month": c.month,
+        "lat": _finite(c.lat),
+        "lng": _finite(c.lng),
+        "kind": c.kind,
+        "probability": _finite(c.probability),
+        "oneIn": oneIn(c.probability),
+        "odds": oddsText(c.probability),
+        "visitCount": c.visitCount,
+        "dwellMinutes": round(_finite(c.dwellMinutes), 1),
+        "panos": [_panoRecord(p) for p in _sortedPanos(c)],
+    }
+
+
+def _dataBlob(ranked: list[Candidate]) -> str:
+    """Candidates as JSON that is safe inside a <script> element and inside JS template literals."""
+    text = json.dumps([_candidateRecord(c) for c in ranked], ensure_ascii=True, allow_nan=False)
+    text = text.replace("</", "<\\/").replace("<!--", "<\\u0021--")
+    return text.replace("`", "\\u0060").replace("$", "\\u0024")
+
+
+def _readTemplate(name: str) -> str:
+    return (TEMPLATES / name).read_text(encoding="utf-8")
+
+
+class _DrawerScript(MacroElement):
+    """Emits the drawer JS into the map's script section, after the cluster group is defined."""
+
+    _template = Template("{% macro script(this, kwargs) %}\n{{ this.code }}\n{% endmacro %}")
+
+    def __init__(self, code: str):
+        super().__init__()
+        self._name = "SvcdDrawer"
+        self.code = code
+
+
+def _countText(count: int) -> str:
+    if count == 0:
+        return "No candidates"
+    return f"{count} candidate" + ("" if count == 1 else "s")
+
+
+def _addDrawer(mapObj: folium.Map, markerCluster: plugins.MarkerCluster, ranked: list[Candidate]) -> None:
+    root = mapObj.get_root()
+    root.header.add_child(folium.Element(f"<style>\n{_readTemplate('drawer.css')}\n</style>"), name="svcd_css")
+    empty = "" if ranked else '<li class="svcd-empty">No candidates found. Nothing to show on the map.</li>'
+    drawerHtml = (
+        _readTemplate("drawer.html")
+        .replace("__SVCD_COUNT_TEXT__", _countText(len(ranked)))
+        .replace("__SVCD_COUNT__", str(len(ranked)))
+        .replace("__SVCD_EMPTY__", empty)
+    )
+    root.html.add_child(folium.Element(drawerHtml), name="svcd_drawer")
+    root.html.add_child(
+        folium.Element(f'<script type="application/json" id="svcd-data">{_dataBlob(ranked)}</script>'),
+        name="svcd_data",
+    )
+    code = (
+        _readTemplate("drawer.js")
+        .replace("__SVCD_MAP__", mapObj.get_name())
+        .replace("__SVCD_CLUSTER__", markerCluster.get_name())
+    )
+    mapObj.add_child(_DrawerScript(code))
+
+
+def buildMap(candidates: list[Candidate], path: Path) -> None:
+    """Folium map with clustered candidate markers, a probability heat layer and a ranked side drawer."""
+    ranked = _ranked(candidates)
+    if ranked:
+        centre = [sum(c.lat for c in ranked) / len(ranked), sum(c.lng for c in ranked) / len(ranked)]
         mapObj = folium.Map(location=centre, zoom_start=12, tiles=None)
     else:
         mapObj = folium.Map(location=DEFAULT_CENTRE, zoom_start=DEFAULT_ZOOM, tiles=None)
@@ -147,21 +295,18 @@ def buildMap(collisions: list[Collision], path: Path) -> None:
         folium.TileLayer(tiles="CartoDB Positron", name="CartoDB Positron", show=False).add_to(mapObj)
     folium.TileLayer(tiles="OpenStreetMap", name="OpenStreetMap", show=False).add_to(mapObj)
 
-    markerCluster = plugins.MarkerCluster(name="Collisions", overlay=True, control=True)
-    for c in collisions:
-        folium.Marker(
-            location=[c.panoLat, c.panoLng],
-            popup=folium.Popup(_popupHtml(c), max_width=300),
-            tooltip=_safeText(f"{_displayName(c)} ({c.month})"),
-        ).add_to(markerCluster)
+    # Markers are created by drawer.js so each one can be looked up by rank; folium only defines
+    # the cluster group and pulls in the Leaflet.markercluster JS and CSS.
+    markerCluster = plugins.MarkerCluster(name="Candidates", overlay=True, control=True)
     markerCluster.add_to(mapObj)
 
-    if collisions:
-        heatData = [[c.panoLat, c.panoLng, w] for c, w in zip(collisions, _heatWeights(collisions))]
+    if ranked:
+        heatData = [[c.lat, c.lng, w] for c, w in zip(ranked, _heatWeights(ranked))]
         HeatMap(heatData, name="Heatmap").add_to(mapObj)
 
     folium.LayerControl().add_to(mapObj)
+    _addDrawer(mapObj, markerCluster, ranked)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     mapObj.save(str(path))
-    log.info(f"Wrote map with {len(collisions)} markers to {path}")
+    log.info(f"Wrote map with {len(ranked)} candidates to {path}")

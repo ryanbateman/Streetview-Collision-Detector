@@ -1,8 +1,10 @@
 """Parser for the on-device Timeline export (Timeline.json / location-history.json).
 
 The file has a top-level semanticSegments[] array. Visit segments carry startTime,
-endTime and visit.topCandidate.{placeId, placeLocation.latLng}; activity and
-timelinePath segments are ignored, as are rawSignals and userLocationProfile.
+endTime and visit.topCandidate.{placeId, semanticType, placeLocation.latLng} and become
+KIND_PLACE Visits. Walking, running and cycling activity segments become two path-point
+Visits (start and end, each covering half the duration, capped at PATH_POINT_MAX_MINUTES). Other activity types,
+timelinePath segments, rawSignals and userLocationProfile are ignored.
 """
 import json
 import logging as log
@@ -10,11 +12,18 @@ import re
 from pathlib import Path
 from typing import Any, Iterator
 
-from svcd.ingest.semanticHistory import parseIsoUtc
-from svcd.models import Visit
+from svcd.ingest.semanticHistory import activityKind, capPathWindow, parseIsoUtc, splitWindows
+from svcd.models import KIND_PLACE, SEMANTIC_HOME, SEMANTIC_WORK, Visit
 
 _NUMBER = r"[-+]?\d+(?:\.\d+)?"
 _LAT_LNG_PATTERN = re.compile(rf"^\s*(?:geo:)?\s*({_NUMBER})\s*°?\s*,\s*({_NUMBER})\s*°?\s*$")
+
+_SEMANTIC_TYPES = {
+    "HOME": SEMANTIC_HOME,
+    "INFERRED_HOME": SEMANTIC_HOME,
+    "WORK": SEMANTIC_WORK,
+    "INFERRED_WORK": SEMANTIC_WORK,
+}
 
 
 def parseLatLng(value: str) -> tuple[float, float]:
@@ -33,20 +42,26 @@ def parseLatLng(value: str) -> tuple[float, float]:
     return lat, lng
 
 
-def _extractLatLng(topCandidate: dict[str, Any]) -> str | None:
-    placeLocation = topCandidate.get("placeLocation")
-    if isinstance(placeLocation, str):
-        return placeLocation
-    if isinstance(placeLocation, dict):
-        latLng = placeLocation.get("latLng")
+def _latLngString(location: Any) -> str | None:
+    """The latLng string of a location that is either a bare string or {"latLng": "..."}."""
+    if isinstance(location, str):
+        return location
+    if isinstance(location, dict):
+        latLng = location.get("latLng")
         if isinstance(latLng, str):
             return latLng
     return None
 
 
+def _semanticType(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return _SEMANTIC_TYPES.get(value.strip().upper())
+
+
 def _visitFromSegment(segment: dict[str, Any]) -> Visit | None:
     topCandidate = (segment.get("visit") or {}).get("topCandidate") or {}
-    latLngRaw = _extractLatLng(topCandidate)
+    latLngRaw = _latLngString(topCandidate.get("placeLocation"))
     startRaw = segment.get("startTime")
     endRaw = segment.get("endTime")
     if latLngRaw is None or not startRaw or not endRaw:
@@ -68,24 +83,70 @@ def _visitFromSegment(segment: dict[str, Any]) -> Visit | None:
         start=start,
         end=end,
         source="timeline",
+        kind=KIND_PLACE,
+        semanticType=_semanticType(topCandidate.get("semanticType")),
+        importance=None,
     )
 
 
+def _visitsFromActivity(segment: dict[str, Any]) -> list[Visit] | None:
+    """Start and end path points of a walking/cycling activity; [] for other types; None if invalid."""
+    activity = segment.get("activity") or {}
+    kind = activityKind((activity.get("topCandidate") or {}).get("type"))
+    if kind is None:
+        return []
+    startRaw = segment.get("startTime")
+    endRaw = segment.get("endTime")
+    if not startRaw or not endRaw:
+        return None
+    try:
+        start = parseIsoUtc(startRaw)
+        end = parseIsoUtc(endRaw)
+    except (TypeError, ValueError):
+        return None
+    if end < start:
+        return None
+    visits = []
+    for key, window in zip(("start", "end"), splitWindows(start, end, 2)):
+        legStart, legEnd = capPathWindow(*window)
+        latLngRaw = _latLngString(activity.get(key))
+        if latLngRaw is None:
+            continue
+        try:
+            lat, lng = parseLatLng(latLngRaw)
+        except ValueError:
+            continue
+        visits.append(Visit(placeId=None, name=None, address=None, lat=lat, lng=lng, start=legStart, end=legEnd,
+                            source="timeline", kind=kind, semanticType=None, importance=None))
+    return visits or None
+
+
 def parseTimelineExport(path: Path) -> Iterator[Visit]:
-    """Yield a Visit for each visit segment of a Timeline export, in file order."""
+    """Yield Visits for the visit and walking/cycling activity segments of a Timeline export, in file order."""
     path = Path(path)
     with path.open("r", encoding="utf-8") as handle:
         data = json.load(handle)
     if not isinstance(data, dict) or "semanticSegments" not in data:
         raise ValueError(f"{path} has no top-level 'semanticSegments' key; not a Timeline export")
-    skipped = 0
+    skippedVisits = 0
+    skippedActivities = 0
     for segment in data["semanticSegments"]:
-        if not isinstance(segment, dict) or "visit" not in segment:
+        if not isinstance(segment, dict):
             continue
-        visit = _visitFromSegment(segment)
-        if visit is None:
-            skipped += 1
-            continue
-        yield visit
-    if skipped:
-        log.warning(f"{path.name}: skipped {skipped} visit segments with missing or invalid coordinates/timestamps")
+        if "visit" in segment:
+            visit = _visitFromSegment(segment)
+            if visit is None:
+                skippedVisits += 1
+            else:
+                yield visit
+        elif "activity" in segment:
+            pathVisits = _visitsFromActivity(segment)
+            if pathVisits is None:
+                skippedActivities += 1
+            else:
+                yield from pathVisits
+    if skippedVisits or skippedActivities:
+        log.warning(
+            f"{path.name}: skipped {skippedVisits} visit segments and {skippedActivities} walking/cycling segments "
+            "with missing or invalid coordinates/timestamps"
+        )

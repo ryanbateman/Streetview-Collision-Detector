@@ -10,7 +10,9 @@
           "placeId": "ChIJfixture101",
           "semanticType": "UNKNOWN",
           "probability": 0.85,
-          "placeLocation": {"latLng": "geo:52.5163,13.3777"}
+          "placeLocation": {
+            "latLng": "geo:52.5163,13.3777"
+          }
         }
       }
     },
@@ -18,18 +20,58 @@
       "startTime": "2025-03-01T12:30:00.000+01:00",
       "endTime": "2025-03-01T12:55:00.000+01:00",
       "activity": {
-        "start": {"latLng": "geo:52.5163,13.3777"},
-        "end": {"latLng": "geo:52.5208,13.4094"},
+        "start": {
+          "latLng": "geo:52.5163,13.3777"
+        },
+        "end": {
+          "latLng": "geo:52.5208,13.4094"
+        },
         "distanceMeters": 2300.0,
-        "topCandidate": {"type": "WALKING", "probability": 0.95}
+        "topCandidate": {
+          "type": "WALKING",
+          "probability": 0.95
+        }
       }
     },
     {
       "startTime": "2025-03-01T12:00:00.000+01:00",
       "endTime": "2025-03-01T14:00:00.000+01:00",
       "timelinePath": [
-        {"point": "geo:52.5170,13.3880", "time": "2025-03-01T12:40:00.000+01:00"}
+        {
+          "point": "geo:52.5170,13.3880",
+          "time": "2025-03-01T12:40:00.000+01:00"
+        }
       ]
+    },
+    {
+      "startTime": "2025-03-01T15:00:00.000+01:00",
+      "endTime": "2025-03-01T15:30:00.000+01:00",
+      "activity": {
+        "start": {
+          "latLng": "geo:52.5208,13.4094"
+        },
+        "end": {
+          "latLng": "geo:52.5400,13.4500"
+        },
+        "distanceMeters": 9000.0,
+        "topCandidate": {
+          "type": "IN_PASSENGER_VEHICLE",
+          "probability": 0.9
+        }
+      }
+    },
+    {
+      "startTime": "2025-03-01T16:00:00.000+01:00",
+      "endTime": "2025-03-01T16:10:00.000+01:00",
+      "activity": {
+        "start": {
+          "latLng": "geo:52.5400,13.4500"
+        },
+        "end": {
+          "latLng": "geo:52.5410,13.4510"
+        },
+        "distanceMeters": 150.0
+      }
     },
     {
       "startTime": "2025-03-30T01:30:00.000+01:00",
@@ -53,9 +95,11 @@
         "probability": 0.8,
         "topCandidate": {
           "placeId": "ChIJfixture103",
-          "semanticType": "UNKNOWN",
+          "semanticType": "WORK",
           "probability": 0.75,
-          "placeLocation": {"latLng": "geo:40.7580,-73.9855"}
+          "placeLocation": {
+            "latLng": "geo:40.7580,-73.9855"
+          }
         }
       }
     },

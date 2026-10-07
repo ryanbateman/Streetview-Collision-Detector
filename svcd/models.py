@@ -14,6 +14,10 @@ KIND_PLACE = "place"        # a stay at a place (placeVisit / visit segment)
 KIND_WALKING = "walking"    # a point on a walking or running path (outdoors by definition)
 KIND_CYCLING = "cycling"    # a point on a cycling path
 
+# Longest time a single walking or cycling path point is taken to cover. A path point is a sample
+# along a route, not a stay, so a long activity with few points must not credit hours to one spot.
+PATH_POINT_MAX_MINUTES = 15
+
 # Visit.semanticType values (normalised across both input formats)
 SEMANTIC_HOME = "HOME"
 SEMANTIC_WORK = "WORK"
@@ -99,9 +103,10 @@ class Collision:
 
 @dataclass(frozen=True)
 class Candidate:
-    """A place and month, ranked by the chance that any of its panoramas caught the user.
+    """A place and month, ranked by the chance that a Street View car caught the user there.
 
-    probability = 1 - prod(1 - collision.probability) over the panoramas listed in panos.
+    probability = coverage * visibility * max(proximity) over the panoramas in panos; several
+    panoramas in one month are treated as one drive.
     panos entries are plain dicts (JSON-safe) with keys:
       panoId, date, url, lat, lng, distanceM, probability
     """

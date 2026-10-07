@@ -3,8 +3,8 @@
 Stages read and write files under --data-dir so each can be rerun on its own:
   ingest  input export            -> data/visits.jsonl
   lookup  visits                  -> data/places.jsonl, data/samplePoints.jsonl, data/panos.jsonl (append, resumable)
-  match   visits + places + panos -> data/collisions.jsonl
-  map     collisions              -> output/collisions.csv, output/collisions.html, output/map.html
+  match   visits + places + panos -> data/collisions.jsonl (per panorama), data/candidates.jsonl (per place and month, ranked)
+  map     candidates              -> output/candidates.csv, output/candidates.html, output/map.html
   run-all all four in sequence
 """
 import argparse
@@ -18,10 +18,10 @@ from typing import Sequence
 import aiohttp
 
 from svcd.ingest import ingestVisits
-from svcd.match import findCollisions, rankCollisions
-from svcd.models import Collision, PanoLookup, Place, SamplePoint, Visit
+from svcd.match import buildCandidates, findCollisions, rankCollisions
+from svcd.models import Candidate, PanoLookup, Place, SamplePoint, Visit
 from svcd.places import buildPlaces, buildSamplePoints
-from svcd.report import buildMap, writeTable
+from svcd.report import buildMap, oddsText, writeTable
 from svcd.storage import appendJsonl, readJsonl, writeJsonl
 from svcd.streetview import StreetViewClient, StreetViewError, openCachedSession
 
@@ -35,8 +35,9 @@ class StagePaths:
         self.samplePoints = dataDir / "samplePoints.jsonl"
         self.panos = dataDir / "panos.jsonl"
         self.collisions = dataDir / "collisions.jsonl"
-        self.collisionsCsv = outputDir / "collisions.csv"
-        self.collisionsHtml = outputDir / "collisions.html"
+        self.candidates = dataDir / "candidates.jsonl"
+        self.candidatesCsv = outputDir / "candidates.csv"
+        self.candidatesHtml = outputDir / "candidates.html"
         self.map = outputDir / "map.html"
         self.cache = cacheDir / "streetview"
 
@@ -132,16 +133,25 @@ def runMatch(paths: StagePaths) -> int:
         raise SystemExit(f"No lookups in {paths.panos}; run lookup first")
     collisions = rankCollisions(findCollisions(visits, places, lookups))
     writeJsonl(paths.collisions, collisions)
-    log.info(f"Found {len(collisions)} collisions across {len({c.placeKey for c in collisions})} places")
-    return len(collisions)
+    candidates = buildCandidates(collisions, places)
+    writeJsonl(paths.candidates, candidates)
+    log.info(f"Found {len(collisions)} panorama collisions, {len(candidates)} ranked place-months "
+             f"across {len({c.placeKey for c in candidates})} places")
+    if candidates:
+        expected = sum(c.probability for c in candidates)
+        log.info(f"Best chance {oddsText(candidates[0].probability)}; "
+                 f"expected number of actual finds across all candidates: {expected:.2f}")
+    return len(candidates)
 
 
 def runMap(paths: StagePaths) -> int:
-    collisions = readJsonl(paths.collisions, Collision)
-    writeTable(collisions, paths.collisionsCsv, paths.collisionsHtml)
-    buildMap(collisions, paths.map)
-    log.info(f"Wrote {paths.collisionsCsv}, {paths.collisionsHtml} and {paths.map}")
-    return len(collisions)
+    candidates = readJsonl(paths.candidates, Candidate)
+    if not candidates and not paths.candidates.exists():
+        raise SystemExit(f"No candidates in {paths.candidates}; run match first")
+    writeTable(candidates, paths.candidatesCsv, paths.candidatesHtml)
+    buildMap(candidates, paths.map)
+    log.info(f"Wrote {paths.candidatesCsv}, {paths.candidatesHtml} and {paths.map}")
+    return len(candidates)
 
 
 def buildParser() -> argparse.ArgumentParser:

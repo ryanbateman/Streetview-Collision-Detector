@@ -4,7 +4,7 @@ This document provides guidelines for AI coding agents working in the Streetview
 
 ## Project Overview
 
-A Python package (`svcd`) that helps users find themselves on Google Streetview. It compares Google location history (visits) with the capture month of Street View panoramas near each visited place. A "collision" is a (place, panorama, month) where the user visited the place during the month the panorama was photographed. Collisions are ranked and written out as CSV, an HTML table and an interactive folium map.
+A Python package (`svcd`) that helps users find themselves on Google Streetview. It compares Google location history (visits) with the capture month of Street View panoramas near each visited place. A "collision" is a (place, panorama, month) where the user visited the place during the month the panorama was photographed. Collisions are ranked by the probability that a panorama caught the user, grouped into place-and-month candidates, and written out as CSV, an HTML table and an interactive folium map with a side drawer.
 
 The pipeline is staged, and each stage reads and writes files so it can be rerun alone: ingest, lookup, match, map.
 
@@ -41,7 +41,7 @@ Global options go before the stage: `--data-dir data`, `--output-dir output`, `-
 ## Testing
 
 ```bash
-.venv\Scripts\python -m pytest -q                              # All 104 tests (no network)
+.venv\Scripts\python -m pytest -q                              # All 199 tests (no network)
 .venv\Scripts\python -m pytest tests/test_match.py             # One file
 .venv\Scripts\python -m pytest tests/test_match.py::test_name  # One test
 .venv\Scripts\python -m pytest -v                              # Verbose output
@@ -66,13 +66,15 @@ mypy .
 ```
 svcd/
   cli.py          entry point, stage wiring, resumable lookups
-  models.py       frozen dataclasses: Visit, Place, SamplePoint, PanoLookup, Collision
+  models.py       frozen dataclasses: Visit, Place, SamplePoint, PanoLookup, Collision, Candidate
   storage.py      JSONL/CSV read and write driven by dataclass type hints
   ingest/         detectFormat, ingestVisits; semanticHistory.py (old Takeout), timelineExport.py (phone export)
   places.py       placeKey, buildPlaces, ringPoints, buildSamplePoints, haversineM
   streetview.py   StreetViewClient (semaphore, retry with backoff), openCachedSession, buildPanoUrl
-  match.py        monthsSpanned, dwellInMonth, findCollisions, rankCollisions
+  match.py        monthsSpanned, dwellInMonth, findCollisions, rankCollisions, buildCandidates
+  scoring.py      likelihood model: solar daylight, coverage, visibility, proximity, combine
   report.py       writeTable, buildMap
+  templates/      drawer.html, drawer.css, drawer.js, inlined into map.html
 tests/            pytest suite; tests/fixtures holds synthetic exports and API responses
 ```
 
@@ -84,7 +86,14 @@ Gitignored working directories: `data/` (stage output as JSONL), `output/` (CSV 
 - `lookup` appends to `data/panos.jsonl` and skips points already done, so reruns resume and `--limit` works in slices. REQUEST_DENIED and INVALID_REQUEST abort at once; HTTP 429/5xx and similar are retried with exponential backoff.
 - Only the current panorama at each point is visible; the API exposes no historical imagery. Dates have month granularity.
 - A visit crossing midnight on the last day of a month counts for both months.
-- Score is `log1p(dwell minutes) + 0.5*log1p(visit count) - distance/200`.
+- Ranking is a probability. Per panorama, `probability = coverage * visibility * proximity` (see `svcd/scoring.py`; all constants are module-level). Per place and month, only the nearest panorama counts, `coverage * visibility * max(proximity)`: dates have month granularity, so several panoramas in one month are treated as one drive. `scoring.combine` remains but is not used for candidates. `Collision.score` is kept only for backwards compatibility and equals the probability.
+  - coverage: dwell in 07:00 to 19:00 solar time (estimated from longitude alone) over the month's daylight hours, with night dwell counted at 5 percent, capped at 1.
+  - visibility prior: 0.9 for walking, running or cycling path places; 0.1 for home or work (semantic type, majority of visits); 0.7 for outdoor-word names (a word ending with a suffix keyword such as park or bahnhof, or equal to a whole-word keyword such as zoo or pier; an exclusion list drops Supermarkt, Parkhaus, Kindergarten and similar) or a majority of transitional visits; 0.5 when the median stay is under 15 minutes; 0.3 otherwise.
+  - proximity: `exp(-distanceM / 40)` from place centre to panorama.
+- Ingest also reads walking, running and cycling activity segments from both formats, one `Visit` per path point (`kind` walking or cycling), each window capped at `PATH_POINT_MAX_MINUTES` (15) and clipped to its segment; other transport modes are ignored. `semanticType` (HOME/WORK) and `importance` are kept on `Visit`.
+- Path points are deduplicated by coordinates rounded to 4 decimals (about 10 m; stays use 5) under keys like `path:52.5163,13.3777`, so a path key never equals a stay key. A path place is centred on its key coordinates, not the mean of its points. Path places are sampled at the centre only; stays still get the ring.
+- `match` writes `data/collisions.jsonl` (one row per panorama) and `data/candidates.jsonl` (one row per place and month, ranked, panoramas listed as dicts) and logs the best odds and the expected number of finds (sum of candidate probabilities). `map` reads only the candidates and writes `output/candidates.csv`, `output/candidates.html` and `output/map.html`. The old collisions.csv and collisions.html are gone.
+- `map.html` is a single standalone file: the drawer markup, CSS and JS in `svcd/templates/` are inlined at build time. The drawer lists candidates 20 per page with a filter, odds, "Show on map" and panorama links; markers are coloured by rank third; a `#rank-N` fragment selects an entry on load.
 - Metadata requests are free and consume no quota. Responses are cached for 180 days in `cache/streetview.sqlite`.
 
 ## Code Style Guidelines

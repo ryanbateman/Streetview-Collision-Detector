@@ -1,16 +1,21 @@
-"""MATCH stage: turn visits, places and pano lookups into ranked Collision records.
+"""MATCH stage: turn visits, places and pano lookups into ranked Collision and Candidate records.
 
 A collision is a (place, panorama, month) where the user stayed at the place during
-the calendar month (UTC) in which the panorama was photographed.
+the calendar month (UTC) in which the panorama was photographed. Each collision carries the
+probability that this panorama caught the user (see svcd.scoring); a Candidate groups the
+collisions of one place and month. Pano dates have month granularity, so several panoramas at one
+place in one month are almost always a single drive by one car: the candidate counts only the
+nearest of them, coverage * visibility * max(proximity), rather than treating them as independent.
 """
 import logging as log
-import math
+from dataclasses import replace
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from svcd.models import Collision, PanoLookup, Place, Visit
+from svcd.models import KIND_PLACE, Candidate, Collision, PanoLookup, Place, Visit
 from svcd.places import haversineM, placeKey
+from svcd.scoring import coverage, daylightDwell, proximity, visibility
 from svcd.streetview import buildPanoUrl
 
 
@@ -54,10 +59,6 @@ def dwellInMonth(visit: Visit, month: str) -> timedelta:
     return overlapEnd - overlapStart
 
 
-def scoreCollision(dwellMinutes: float, visitCount: int, distanceM: float) -> float:
-    return math.log1p(dwellMinutes) + 0.5 * math.log1p(visitCount) - distanceM / 200
-
-
 def visitKey(visit: Visit) -> str:
     """Same key the lookup stage uses for a place."""
     return placeKey(visit)
@@ -94,6 +95,7 @@ def findCollisions(
     visitMonths = {id(v): set(monthsSpanned(v.start, v.end)) for vs in visitsByKey.values() for v in vs}
 
     collisions: list[Collision] = []
+    missingPlaces = 0
     for placeKey, placeLookups in _usableLookups(lookups).items():
         placeVisits = visitsByKey.get(placeKey)
         if not placeVisits:
@@ -102,10 +104,12 @@ def findCollisions(
         if place is not None:
             centreLat, centreLng, name = place.lat, place.lng, place.name
         else:
-            log.warning(f"No Place record for {placeKey}; using mean visit position")
+            missingPlaces += 1
+            log.debug(f"No Place record for {placeKey}; using mean visit position")
             centreLat = sum(v.lat for v in placeVisits) / len(placeVisits)
             centreLng = sum(v.lng for v in placeVisits) / len(placeVisits)
             name = next((v.name for v in placeVisits if v.name), None)
+        placeVisibility = visibility(placeVisits, name)
 
         # Several ring samples often hit the same panorama: keep the one nearest the centre.
         best: dict[tuple[str, str], tuple[float, PanoLookup]] = {}
@@ -122,7 +126,10 @@ def findCollisions(
                         if panoMonth in visitMonths[id(v)] and dwellInMonth(v, panoMonth) > timedelta(0)]
             if not matching:
                 continue
-            dwellMinutes = sum(dwellInMonth(v, panoMonth).total_seconds() for v in matching) / 60
+            daylight, _ = daylightDwell(matching, panoMonth)
+            placeCoverage = coverage(matching, panoMonth)
+            panoProximity = proximity(distance)
+            probability = placeCoverage * placeVisibility * panoProximity
             panoLat, panoLng = _panoPosition(lookup)
             collisions.append(Collision(
                 placeKey=placeKey,
@@ -134,13 +141,75 @@ def findCollisions(
                 panoLng=panoLng,
                 distanceM=distance,
                 visitCount=len(matching),
-                dwellMinutes=dwellMinutes,
-                score=scoreCollision(dwellMinutes, len(matching), distance),
+                dwellMinutes=daylight.total_seconds() / 60,
+                score=probability,
                 url=buildPanoUrl(panoId, panoLat, panoLng),
+                coverage=placeCoverage,
+                visibility=placeVisibility,
+                proximity=panoProximity,
+                probability=probability,
             ))
+    if missingPlaces:
+        log.warning(f"{missingPlaces} places with visits and panoramas have no Place record; "
+                    "used the mean visit position (rerun ingest to rebuild places)")
     return collisions
 
 
 def rankCollisions(collisions: Iterable[Collision]) -> list[Collision]:
-    """Highest score first; ties broken by placeKey, month, panoId for deterministic output."""
-    return sorted(collisions, key=lambda c: (-c.score, c.placeKey, c.month, c.panoId))
+    """Most probable first; ties broken by placeKey, month, panoId for deterministic output."""
+    return sorted(collisions, key=lambda c: (-c.probability, c.placeKey, c.month, c.panoId))
+
+
+def buildCandidates(collisions: Iterable[Collision], places: Iterable[Place]) -> list[Candidate]:
+    """One Candidate per (placeKey, month), ranked 1..n by probability (ties: placeKey, month).
+
+    Its probability is coverage * visibility * max(proximity) over its distinct panoramas, which is
+    the best panorama's own probability since all of them share the place-month's coverage and
+    visibility. Several panoramas in one month are treated as one drive, not as independent chances.
+    A panorama listed twice keeps its best entry. A collision without a Place record still yields a
+    Candidate, centred on its nearest panorama.
+    """
+    placeByKey = {place.key: place for place in places}
+    groups: dict[tuple[str, str], dict[str, Collision]] = defaultdict(dict)
+    for collision in collisions:
+        byPano = groups[(collision.placeKey, collision.month)]
+        known = byPano.get(collision.panoId)
+        if known is None or collision.probability > known.probability:
+            byPano[collision.panoId] = collision
+
+    unranked: list[Candidate] = []
+    for (key, month), byPano in groups.items():
+        members = sorted(byPano.values(), key=lambda c: (-c.probability, c.distanceM, c.panoId))
+        first = members[0]
+        place = placeByKey.get(key)
+        if place is not None:
+            lat, lng, kind, name = place.lat, place.lng, place.kind, place.name
+        else:
+            nearest = min(members, key=lambda c: (c.distanceM, c.panoId))
+            lat, lng, kind, name = nearest.panoLat, nearest.panoLng, KIND_PLACE, first.name
+        unranked.append(Candidate(
+            rank=0,
+            placeKey=key,
+            name=name if name is not None else first.name,
+            month=month,
+            lat=lat,
+            lng=lng,
+            kind=kind,
+            probability=first.probability,
+            coverage=max(c.coverage for c in members),
+            visibility=max(c.visibility for c in members),
+            visitCount=max(c.visitCount for c in members),
+            dwellMinutes=max(c.dwellMinutes for c in members),
+            panos=[{
+                "panoId": c.panoId,
+                "date": c.panoDate,
+                "url": c.url,
+                "lat": c.panoLat,
+                "lng": c.panoLng,
+                "distanceM": c.distanceM,
+                "probability": c.probability,
+            } for c in members],
+        ))
+
+    unranked.sort(key=lambda c: (-c.probability, c.placeKey, c.month))
+    return [replace(candidate, rank=rank) for rank, candidate in enumerate(unranked, start=1)]
