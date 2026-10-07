@@ -1,6 +1,7 @@
 """MAP stage: render ranked collisions as CSV, a standalone HTML table and a folium map."""
 import html
 import logging as log
+import warnings
 from pathlib import Path
 
 import folium
@@ -13,6 +14,7 @@ from svcd.storage import writeCsv
 
 DEFAULT_CENTRE = [52.52, 13.405]
 DEFAULT_ZOOM = 5
+DEFAULT_TILES = "Esri.WorldStreetMap"
 
 _PAGE_STYLE = """
 body { font-family: system-ui, sans-serif; margin: 16px; color: #222; }
@@ -132,9 +134,18 @@ def buildMap(collisions: list[Collision], path: Path) -> None:
             sum(c.panoLat for c in collisions) / len(collisions),
             sum(c.panoLng for c in collisions) / len(collisions),
         ]
-        mapObj = folium.Map(location=centre, zoom_start=12)
+        mapObj = folium.Map(location=centre, zoom_start=12, tiles=None)
     else:
-        mapObj = folium.Map(location=DEFAULT_CENTRE, zoom_start=DEFAULT_ZOOM)
+        mapObj = folium.Map(location=DEFAULT_CENTRE, zoom_start=DEFAULT_ZOOM, tiles=None)
+    # OpenStreetMap's tile server refuses requests that arrive without a Referer header, which is
+    # what happens when the saved HTML is opened as a local file. Esri's street map needs neither a
+    # Referer nor a key, so it is the default; Carto (currently keyless but folium warns it may need
+    # a key) and OSM (works when the file is served over http) stay selectable in the layer control.
+    folium.TileLayer(tiles=DEFAULT_TILES, name="Esri World Street Map").add_to(mapObj)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+        folium.TileLayer(tiles="CartoDB Positron", name="CartoDB Positron", show=False).add_to(mapObj)
+    folium.TileLayer(tiles="OpenStreetMap", name="OpenStreetMap", show=False).add_to(mapObj)
 
     markerCluster = plugins.MarkerCluster(name="Collisions", overlay=True, control=True)
     for c in collisions:

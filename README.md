@@ -60,6 +60,7 @@ Each stage reads and writes files, so you can rerun any of them on its own. Glob
 A few.
 - Only the *current* panorama at each point is checked. Google does not expose historical imagery through the API, so if a street was re-photographed after your visit, the older panorama is invisible to this tool.
 - Panorama dates have month granularity. You still have to wander around Streetview yourself.
+- The map defaults to Esri's street tiles because OpenStreetMap's tile server refuses requests without a Referer header, which is what you get when you open `output/map.html` straight from disk. OpenStreetMap and Carto are still in the layer control; OpenStreetMap works if you serve the folder instead, for example `python -m http.server -d output 8000` and then open http://localhost:8000/map.html.
 - `cache/streetview.sqlite` contains your API key inside the stored request URLs. It is gitignored. Do not share it.
 - `data/`, `output/`, `cache/` and `takeout/` are gitignored because they hold your personal location data. Keep it that way.
 - And, uh, I'm not a Python developer. Or a developer at all. So, you know, it could all break. (PRs welcomed.)

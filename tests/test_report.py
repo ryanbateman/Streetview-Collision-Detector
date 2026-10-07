@@ -85,3 +85,14 @@ def testHeatWeightsKeepWeakestPointVisible():
     from svcd.report import _heatWeights
     weights = _heatWeights([makeCollision("a", -3.0), makeCollision("b", 0.0), makeCollision("c", 5.0)])
     assert min(weights) == pytest.approx(0.1) and max(weights) == pytest.approx(1.0)
+
+
+def testBuildMapDefaultsToKeylessEsriTilesWithAlternatives(tmp_path):
+    # Opened as a local file, the browser sends no Referer, and OSM's tile server then refuses the
+    # request. The default basemap must work without a Referer or an API key.
+    path = tmp_path / "map.html"
+    buildMap([makeCollision("a", 1.0)], path)
+    page = path.read_text(encoding="utf-8")
+    assert "server.arcgisonline.com" in page
+    assert "basemaps.cartocdn.com" in page and "tile.openstreetmap.org" in page
+    assert page.index("arcgisonline") < page.index("cartocdn") < page.index("tile.openstreetmap.org")
