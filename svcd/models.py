@@ -75,6 +75,19 @@ class PanoLookup:
     date: str | None  # "YYYY-MM" as returned, or None when absent
     panoLat: float | None
     panoLng: float | None
+    copyright: str | None = None  # API credit line; Google imagery is credited to Google, user photospheres to the contributor
+
+
+# Panorama provenance, derived from PanoLookup.copyright
+SOURCE_GOOGLE = "google"  # Google's own car, trekker or backpack imagery
+SOURCE_USER = "user"      # a photosphere uploaded by a Maps contributor
+
+
+def panoSource(copyright: str | None) -> str:
+    """Classify a panorama by its credit line. Unknown credits count as Google (the common case)."""
+    if copyright and "google" not in copyright.casefold():
+        return SOURCE_USER
+    return SOURCE_GOOGLE
 
 
 @dataclass(frozen=True)
@@ -99,16 +112,19 @@ class Collision:
     visibility: float = 0.0  # prior that the user was outdoors and in view at this place
     proximity: float = 0.0   # exp(-distanceM / 40)
     probability: float = 0.0
+    source: str = SOURCE_GOOGLE  # SOURCE_GOOGLE or SOURCE_USER, from the lookup's copyright
 
 
 @dataclass(frozen=True)
 class Candidate:
-    """A place and month, ranked by the chance that a Street View car caught the user there.
+    """A place, month and provenance, ranked by the chance that the camera caught the user there.
 
+    One Candidate per (placeKey, month, source): Google imagery and user photospheres at the same
+    place are ranked separately so the map can filter by provenance without recomputing odds.
     probability = coverage * visibility * max(proximity) over the panoramas in panos; several
-    panoramas in one month are treated as one drive.
+    panoramas of one source in one month are treated as one capture.
     panos entries are plain dicts (JSON-safe) with keys:
-      panoId, date, url, lat, lng, distanceM, probability
+      panoId, date, url, lat, lng, distanceM, probability, source, copyright
     """
     rank: int
     placeKey: str
@@ -123,3 +139,5 @@ class Candidate:
     visitCount: int
     dwellMinutes: float
     panos: list[dict[str, Any]] = field(default_factory=list)
+    source: str = SOURCE_GOOGLE
+    checkKey: str = ""  # stable id for the map's "checked" state: f"{placeKey}|{month}|{source}"
