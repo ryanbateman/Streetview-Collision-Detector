@@ -9,7 +9,7 @@ from svcd.report import CSV_COLUMNS, _heatWeights, buildMap, oddsText, oneIn, wr
 
 HEADER = [
     "rank", "placeKey", "name", "month", "lat", "lng", "kind", "probability", "oneIn", "coverage",
-    "visibility", "visitCount", "dwellMinutes", "panoCount", "panoUrls",
+    "visibility", "visitCount", "dwellMinutes", "panoCount", "panoUrls", "source", "checkKey",
 ]
 
 
@@ -17,18 +17,27 @@ def panoUrl(panoId: str) -> str:
     return f"https://www.google.com/maps/@?api=1&map_action=pano&pano={panoId}"
 
 
-def makePano(panoId: str, probability: float, url: str | None = None) -> dict:
+def makePano(panoId: str, probability: float, url: str | None = None, **extra) -> dict:
+    """extra: optional source and copyright, which older pano dicts lack."""
     return {"panoId": panoId, "date": "2022-08", "url": url if url is not None else panoUrl(panoId),
-            "lat": 52.5, "lng": 13.4, "distanceM": 12.6, "probability": probability}
+            "lat": 52.5, "lng": 13.4, "distanceM": 12.6, "probability": probability, **extra}
 
 
 def makeCandidate(rank: int, probability: float, name: str | None = "Cafe <Ost>", lat: float = 52.5,
-                  lng: float = 13.4, panos: list[dict] | None = None, month: str = "2022-08") -> Candidate:
+                  lng: float = 13.4, panos: list[dict] | None = None, month: str = "2022-08",
+                  source: str = "google", checkKey: str | None = None) -> Candidate:
     if panos is None:
         panos = [makePano(f"P{rank}a", probability / 2), makePano(f"P{rank}best", probability)]
+    if checkKey is None:
+        checkKey = f"key-{rank}|{month}|{source}"
     return Candidate(rank=rank, placeKey=f"key-{rank}", name=name, month=month, lat=lat, lng=lng, kind="place",
                      probability=probability, coverage=0.2, visibility=0.5, visitCount=2, dwellMinutes=90.4,
-                     panos=panos)
+                     panos=panos, source=source, checkKey=checkKey)
+
+
+def makeUserCandidate(rank: int, probability: float, credit: str = "Fixture Contributor 3", **kwargs) -> Candidate:
+    panos = [makePano(f"U{rank}", probability, source="user", copyright=credit)]
+    return makeCandidate(rank, probability, panos=panos, source="user", **kwargs)
 
 
 def readCsv(path):
@@ -94,6 +103,47 @@ def testWriteTableCsvAndHtml(tmp_path):
     assert "daylight dwell (min)" in page
 
 
+def testWriteTableCsvHasSourceAndCheckKey(tmp_path):
+    candidates = [makeCandidate(1, 0.2), makeUserCandidate(2, 0.1)]
+    csvPath = tmp_path / "c.csv"
+    writeTable(candidates, csvPath, tmp_path / "c.html")
+    rows = readCsv(csvPath)
+    assert "source" in rows[0] and "checkKey" in rows[0]
+    byRank = {r[0]: dict(zip(rows[0], r)) for r in rows[1:]}
+    assert byRank["1"]["source"] == "google"
+    assert byRank["2"]["source"] == "user"
+    assert byRank["1"]["checkKey"] == "key-1|2022-08|google"
+    assert byRank["2"]["checkKey"] == "key-2|2022-08|user"
+
+
+def testWriteTableDerivesMissingCheckKey(tmp_path):
+    csvPath = tmp_path / "c.csv"
+    writeTable([makeCandidate(1, 0.2, source="user", checkKey="")], csvPath, tmp_path / "c.html")
+    assert dict(zip(HEADER, readCsv(csvPath)[1]))["checkKey"] == "key-1|2022-08|user"
+
+
+def testWriteTableHtmlShowsSourceBadgesAndCredit(tmp_path):
+    candidates = [makeCandidate(1, 0.2), makeUserCandidate(2, 0.1, credit="Fixture <Contributor> 3")]
+    htmlPath = tmp_path / "c.html"
+    writeTable(candidates, tmp_path / "c.csv", htmlPath)
+    page = htmlPath.read_text(encoding="utf-8")
+    assert "<th>source</th>" in page
+    assert '<span class="badge google">Google</span>' in page
+    assert '<span class="badge user">User photo</span>' in page
+    assert '<span class="credit">Fixture &lt;Contributor&gt; 3</span>' in page  # credit line, escaped
+    assert page.count('class="credit"') == 1  # Google panoramas carry no credit line
+
+
+def testWriteTablePanoSourceFallsBackToCandidate(tmp_path):
+    # pano dicts written before provenance existed have no source or copyright
+    c = makeCandidate(1, 0.2, source="user", panos=[makePano("old", 0.2)])
+    htmlPath = tmp_path / "c.html"
+    writeTable([c], tmp_path / "c.csv", htmlPath)
+    page = htmlPath.read_text(encoding="utf-8")
+    assert page.count('<span class="badge user">User photo</span>') == 2  # source cell and the pano link
+    assert 'class="credit"' not in page
+
+
 def testWriteTableEmpty(tmp_path):
     csvPath, htmlPath = tmp_path / "c.csv", tmp_path / "c.html"
     writeTable([], csvPath, htmlPath)
@@ -154,6 +204,56 @@ def testBuildMapNeutralisesScriptAndTemplateLiteralCharacters(tmp_path):
     blob = dataBlob(page)  # the regex stops at the first </script>, so the blob must not contain one
     assert "</script" not in blob and "`" not in blob and "${" not in blob
     assert json.loads(blob)[0]["name"] == name
+    assert "`${alert(2)}`" not in page
+
+
+def testBuildMapProvenanceAndCheckedState(tmp_path):
+    candidates = [makeCandidate(1, 0.3), makeUserCandidate(2, 0.2), makeCandidate(3, 0.1, panos=[makePano("x", 0.1)])]
+    path = tmp_path / "map.html"
+    buildMap(candidates, path)
+    page = path.read_text(encoding="utf-8")
+
+    for text in ("svcd-checked", "Export checked", "Import checked", "Clear checked", "User photo", "Google"):
+        assert text in page
+    # three-way provenance control and the checked filter
+    assert 'id="svcd-source-filter"' in page
+    for value in ("all", "google", "user"):
+        assert f'name="svcd-source" value="{value}"' in page
+    assert "Google only" in page and "User photos only" in page
+    for value in ("all", "unchecked", "checked"):
+        assert f'name="svcd-checked" value="{value}"' in page
+    assert "svcd-checked.json" in page and "localStorage" in page and "confirm(" in page
+
+    records = {r["rank"]: r for r in json.loads(dataBlob(page))}
+    assert records[1]["source"] == "google" and records[1]["checkKey"] == "key-1|2022-08|google"
+    assert records[2]["source"] == "user" and records[2]["checkKey"] == "key-2|2022-08|user"
+    assert records[2]["panos"][0]["source"] == "user"
+    assert records[2]["panos"][0]["copyright"] == "Fixture Contributor 3"
+    assert records[3]["panos"][0]["source"] == "google"  # falls back to the candidate's source
+    assert records[3]["panos"][0]["copyright"] is None
+    assert [records[r]["heat"] for r in (1, 2, 3)] == pytest.approx([1.0, 0.55, 0.1])
+
+    # the drawer script can rebuild the heat layer folium created
+    heatName = re.search(r"var (heat_map_[0-9a-f]+) = L\.heatLayer\(", page).group(1)
+    assert f"var heat = {heatName};" in page
+    assert "setLatLngs" in page
+
+
+def testBuildMapEmptyHasNoHeatLayer(tmp_path):
+    path = tmp_path / "map.html"
+    buildMap([], path)
+    page = path.read_text(encoding="utf-8")
+    assert "var heat = null;" in page and "__SVCD_" not in page
+
+
+def testBuildMapNeutralisesCopyright(tmp_path):
+    credit = "Fixture </script><script>alert(1)</script> `${alert(2)}` Contributor"
+    path = tmp_path / "map.html"
+    buildMap([makeUserCandidate(1, 0.2, credit=credit)], path)
+    page = path.read_text(encoding="utf-8")
+    blob = dataBlob(page)
+    assert "</script" not in blob and "`" not in blob and "${" not in blob
+    assert json.loads(blob)[0]["panos"][0]["copyright"] == credit
     assert "`${alert(2)}`" not in page
 
 

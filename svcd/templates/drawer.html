@@ -10,8 +10,28 @@
       <span><i class="svcd-b0"></i>top third</span>
       <span><i class="svcd-b1"></i>middle third</span>
       <span><i class="svcd-b2"></i>bottom third</span>
+      <span><i class="svcd-grey"></i>checked</span>
     </div>
     <input type="search" id="svcd-filter" placeholder="Filter by name or month" aria-label="Filter by name or month" autocomplete="off">
+    <fieldset class="svcd-seg" id="svcd-source-filter">
+      <legend>Imagery</legend>
+      <label><input type="radio" name="svcd-source" value="all" checked><span>All</span></label>
+      <label><input type="radio" name="svcd-source" value="google"><span>Google only</span></label>
+      <label><input type="radio" name="svcd-source" value="user"><span>User photos only</span></label>
+    </fieldset>
+    <fieldset class="svcd-seg" id="svcd-checked-filter">
+      <legend>Checked</legend>
+      <label><input type="radio" name="svcd-checked" value="all" checked><span>All</span></label>
+      <label><input type="radio" name="svcd-checked" value="unchecked"><span>Unchecked</span></label>
+      <label><input type="radio" name="svcd-checked" value="checked"><span>Checked</span></label>
+    </fieldset>
+    <div class="svcd-actions">
+      <button type="button" class="svcd-btn" id="svcd-export">Export checked</button>
+      <button type="button" class="svcd-btn" id="svcd-import">Import checked</button>
+      <button type="button" class="svcd-btn" id="svcd-clear">Clear checked</button>
+      <input type="file" id="svcd-import-file" accept=".json,application/json" hidden>
+    </div>
+    <p class="svcd-note" id="svcd-note" role="status" aria-live="polite"></p>
   </header>
   <ul id="svcd-list">__SVCD_EMPTY__</ul>
   <nav class="svcd-pager" aria-label="Pages">

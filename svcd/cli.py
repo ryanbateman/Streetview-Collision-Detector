@@ -12,6 +12,7 @@ import asyncio
 import logging as log
 import os
 import sys
+from collections import Counter
 from pathlib import Path
 from typing import Sequence
 
@@ -76,9 +77,23 @@ DONE_STATUSES = {"OK", "ZERO_RESULTS", "NOT_FOUND"}
 
 
 def pendingSamplePoints(points: list[SamplePoint], done: list[PanoLookup]) -> list[SamplePoint]:
-    """Points without a definitive lookup yet. ERROR rows (quota, network) are retried on the next run."""
-    doneKeys = {(lookup.placeKey, lookup.queryLat, lookup.queryLng)
-                for lookup in done if lookup.status in DONE_STATUSES}
+    """Points without a definitive lookup yet. ERROR rows (quota, network) are retried on the next run.
+
+    An OK row without a credit line was written before copyright was stored, so the point is looked
+    up once more (normally from the cache) to fill it in. A second such row means the API itself
+    gave no credit, and the point counts as done so reruns do not keep appending rows.
+    """
+    doneKeys: set[tuple[str, float, float]] = set()
+    uncredited: Counter[tuple[str, float, float]] = Counter()
+    for lookup in done:
+        if lookup.status not in DONE_STATUSES:
+            continue
+        key = (lookup.placeKey, lookup.queryLat, lookup.queryLng)
+        if lookup.status == "OK" and lookup.copyright is None:
+            uncredited[key] += 1
+            if uncredited[key] < 2:
+                continue
+        doneKeys.add(key)
     return [point for point in points if (point.placeKey, point.lat, point.lng) not in doneKeys]
 
 
@@ -133,10 +148,12 @@ def runMatch(paths: StagePaths) -> int:
         raise SystemExit(f"No lookups in {paths.panos}; run lookup first")
     collisions = rankCollisions(findCollisions(visits, places, lookups))
     writeJsonl(paths.collisions, collisions)
-    candidates = buildCandidates(collisions, places)
+    candidates = buildCandidates(collisions, places, lookups)
     writeJsonl(paths.candidates, candidates)
+    bySource = Counter(c.source for c in candidates)
     log.info(f"Found {len(collisions)} panorama collisions, {len(candidates)} ranked place-months "
-             f"across {len({c.placeKey for c in candidates})} places")
+             f"across {len({c.placeKey for c in candidates})} places "
+             f"({bySource.get('google', 0)} Google imagery, {bySource.get('user', 0)} user photospheres)")
     if candidates:
         expected = sum(c.probability for c in candidates)
         log.info(f"Best chance {oddsText(candidates[0].probability)}; "

@@ -84,8 +84,8 @@ SOURCE_USER = "user"      # a photosphere uploaded by a Maps contributor
 
 
 def panoSource(copyright: str | None) -> str:
-    """Classify a panorama by its credit line. Unknown credits count as Google (the common case)."""
-    if copyright and "google" not in copyright.casefold():
+    """Classify a panorama by its credit line. Missing, empty or blank credits count as Google (the common case)."""
+    if copyright and copyright.strip() and "google" not in copyright.casefold():
         return SOURCE_USER
     return SOURCE_GOOGLE
 

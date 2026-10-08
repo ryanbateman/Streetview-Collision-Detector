@@ -7,7 +7,7 @@ import aiohttp
 import pytest
 from aioresponses import CallbackResult, aioresponses
 
-from svcd.models import PanoLookup, SamplePoint
+from svcd.models import SOURCE_GOOGLE, SOURCE_USER, PanoLookup, SamplePoint, panoSource
 from svcd.streetview import META_URL, StreetViewClient, StreetViewError, buildPanoUrl, openCachedSession
 
 URL_PATTERN = re.compile(r"^" + re.escape(META_URL) + r"(\?.*)?$")
@@ -35,7 +35,30 @@ async def test_ok_response_parsed(fixturesDir):
     assert result == PanoLookup(
         placeKey="ChIJtest", queryLat=52.5163, queryLng=13.3777, status="OK",
         panoId="TESTPANO_ok-123", date="2022-08", panoLat=52.51628, panoLng=13.37771,
+        copyright="\u00a9 Google",
     )
+    assert panoSource(result.copyright) == SOURCE_GOOGLE
+
+
+async def test_user_photosphere_keeps_contributor_credit(fixturesDir):
+    with aioresponses() as mocked:
+        mocked.get(URL_PATTERN, payload=loadFixture(fixturesDir, "user"))
+        result = await runLookup()
+    assert result.status == "OK"
+    assert result.panoId == "TESTPANO_user-456"
+    assert result.copyright == "\u00a9 Jane Contributor"
+    assert "google" not in result.copyright.casefold()
+    assert panoSource(result.copyright) == SOURCE_USER
+
+
+async def test_missing_copyright_is_none(fixturesDir):
+    payload = loadFixture(fixturesDir, "ok")
+    del payload["copyright"]
+    with aioresponses() as mocked:
+        mocked.get(URL_PATTERN, payload=payload)
+        result = await runLookup()
+    assert result.status == "OK"
+    assert result.copyright is None
 
 
 async def test_ok_without_date(fixturesDir):

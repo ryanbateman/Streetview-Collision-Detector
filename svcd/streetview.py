@@ -160,6 +160,7 @@ class StreetViewClient:
             date=payload.get("date"),
             panoLat=location.get("lat"),
             panoLng=location.get("lng"),
+            copyright=payload.get("copyright"),
         )
 
     @staticmethod

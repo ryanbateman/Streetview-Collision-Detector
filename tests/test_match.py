@@ -11,13 +11,17 @@ from svcd.match import (
     monthsSpanned,
     rankCollisions,
 )
-from svcd.models import KIND_PLACE, KIND_WALKING, Collision, PanoLookup, Place, Visit
+from svcd.models import (
+    KIND_PLACE, KIND_WALKING, SOURCE_GOOGLE, SOURCE_USER, Collision, PanoLookup, Place, Visit,
+)
 from svcd.places import buildPlaces
 from svcd.scoring import coverage, proximity, visibility
 
 UTC = timezone.utc
 LAT, LNG = 52.48568, 13.37656
 KEY = "place-1"
+GOOGLE_CREDIT = "\u00a9 Google"
+USER_CREDIT = "\u00a9 Jane Contributor"
 
 
 def dt(*args: int) -> datetime:
@@ -39,16 +43,18 @@ def makeLookup(
     placeKey: str = KEY,
     panoLat: float = LAT + 0.0001,
     panoLng: float = LNG,
+    copyright: str | None = GOOGLE_CREDIT,
 ) -> PanoLookup:
     return PanoLookup(placeKey=placeKey, queryLat=LAT, queryLng=LNG, status=status, panoId=panoId,
-                      date=date, panoLat=panoLat, panoLng=panoLng)
+                      date=date, panoLat=panoLat, panoLng=panoLng, copyright=copyright)
 
 
 def makeCollision(placeKey: str, month: str, probability: float, panoId: str = "p",
-                  distanceM: float = 0.0, name: str | None = None) -> Collision:
+                  distanceM: float = 0.0, name: str | None = None, source: str = SOURCE_GOOGLE) -> Collision:
     return Collision(placeKey=placeKey, name=name, month=month, panoId=panoId, panoDate=month, panoLat=1.0,
                      panoLng=2.0, distanceM=distanceM, visitCount=1, dwellMinutes=1.0, score=probability,
-                     url=f"u-{panoId}", coverage=0.5, visibility=0.3, proximity=1.0, probability=probability)
+                     url=f"u-{panoId}", coverage=0.5, visibility=0.3, proximity=1.0, probability=probability,
+                     source=source)
 
 
 # monthsSpanned
@@ -263,7 +269,9 @@ def testBuildCandidatesMergesPanosOfOnePlaceMonth():
     assert (c.coverage, c.visibility, c.visitCount, c.dwellMinutes) == (0.5, 0.3, 1, 1.0)
     assert [p["panoId"] for p in c.panos] == ["strong", "weak"]
     assert c.panos[0] == {"panoId": "strong", "date": "2022-08", "url": "u-strong", "lat": 1.0, "lng": 2.0,
-                          "distanceM": 10.0, "probability": 0.5}
+                          "distanceM": 10.0, "probability": 0.5, "source": SOURCE_GOOGLE, "copyright": None}
+    assert c.source == SOURCE_GOOGLE
+    assert c.checkKey == "a|2022-08|google"
 
 
 def testBuildCandidatesRanksByProbabilityThenKeyThenMonth():
@@ -321,3 +329,72 @@ def testFindCollisionsFeedBuildCandidates():
     assert candidates[0].probability == pytest.approx(max(c.probability for c in collisions))
     assert candidates[0].dwellMinutes == pytest.approx(120)
     assert [p["panoId"] for p in candidates[0].panos] == ["a", "b"]
+
+
+# provenance
+
+def testFindCollisionsSetsSourceFromCopyright():
+    visits = [makeVisit(dt(2022, 8, 5, 10), dt(2022, 8, 5, 11))]
+    lookups = [
+        makeLookup(panoId="g", copyright="\u00a9 2022 Google"),
+        makeLookup(panoId="u", copyright=USER_CREDIT),
+        makeLookup(panoId="n", copyright=None),
+    ]
+    sources = {c.panoId: c.source for c in findCollisions(visits, [makePlace()], lookups)}
+    assert sources == {"g": SOURCE_GOOGLE, "u": SOURCE_USER, "n": SOURCE_GOOGLE}
+
+
+def testRefilledLookupWithCreditWinsTieOverOlderUncreditedRow():
+    visits = [makeVisit(dt(2022, 8, 5, 10), dt(2022, 8, 5, 11))]
+    lookups = [makeLookup(panoId="u", copyright=None), makeLookup(panoId="u", copyright=USER_CREDIT)]
+    [collision] = findCollisions(visits, [makePlace()], lookups)
+    assert collision.source == SOURCE_USER
+
+
+def testMixedSourcePlaceMonthGivesOneCandidatePerSource():
+    visits = [makeVisit(dt(2022, 8, 5, 10), dt(2022, 8, 5, 12))]
+    lookups = [
+        makeLookup(panoId="google-pano", panoLat=LAT + 0.0004, copyright=GOOGLE_CREDIT),
+        makeLookup(panoId="user-pano", panoLat=LAT + 0.00001, copyright=USER_CREDIT),
+    ]
+    collisions = findCollisions(visits, [makePlace()], lookups)
+    byPano = {c.panoId: c for c in collisions}
+    candidates = buildCandidates(collisions, [makePlace()], lookups)
+    assert len(candidates) == 2
+    bySource = {c.source: c for c in candidates}
+    assert set(bySource) == {SOURCE_GOOGLE, SOURCE_USER}
+    google, user = bySource[SOURCE_GOOGLE], bySource[SOURCE_USER]
+    assert google.checkKey == f"{KEY}|2022-08|google"
+    assert user.checkKey == f"{KEY}|2022-08|user"
+    assert [p["panoId"] for p in google.panos] == ["google-pano"]
+    assert [p["panoId"] for p in user.panos] == ["user-pano"]
+    assert (google.panos[0]["source"], google.panos[0]["copyright"]) == (SOURCE_GOOGLE, GOOGLE_CREDIT)
+    assert (user.panos[0]["source"], user.panos[0]["copyright"]) == (SOURCE_USER, USER_CREDIT)
+    assert google.probability == pytest.approx(byPano["google-pano"].probability)
+    assert user.probability == pytest.approx(byPano["user-pano"].probability)
+    assert user.probability > google.probability  # the photosphere sits nearer the centre
+    assert [(c.rank, c.source) for c in candidates] == [(1, SOURCE_USER), (2, SOURCE_GOOGLE)]
+
+
+def testCheckKeyFormat():
+    [c] = buildCandidates([makeCollision("ChIJabc", "2021-03", 0.2, source=SOURCE_USER)], [])
+    assert c.checkKey == "ChIJabc|2021-03|user"
+    assert c.source == SOURCE_USER
+    assert c.panos[0]["source"] == SOURCE_USER
+    assert c.panos[0]["copyright"] is None  # no lookups passed
+
+
+def testRankIsContiguousAcrossSourcesAndTiesPutGoogleFirst():
+    collisions = [
+        makeCollision("a", "2022-01", 0.1, panoId="u1", source=SOURCE_USER),
+        makeCollision("a", "2022-01", 0.1, panoId="g1", source=SOURCE_GOOGLE),
+        makeCollision("b", "2022-01", 0.4, panoId="u2", source=SOURCE_USER),
+        makeCollision("b", "2022-01", 0.2, panoId="g2", source=SOURCE_GOOGLE),
+        makeCollision("c", "2020-05", 0.3, panoId="g3", source=SOURCE_GOOGLE),
+    ]
+    candidates = buildCandidates(collisions, [])
+    assert [(c.rank, c.placeKey, c.source) for c in candidates] == [
+        (1, "b", SOURCE_USER), (2, "c", SOURCE_GOOGLE), (3, "b", SOURCE_GOOGLE),
+        (4, "a", SOURCE_GOOGLE), (5, "a", SOURCE_USER),
+    ]
+    assert len({c.checkKey for c in candidates}) == len(candidates)

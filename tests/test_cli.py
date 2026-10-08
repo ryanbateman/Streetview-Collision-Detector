@@ -84,7 +84,7 @@ def test_lookup_denied_key_aborts_with_message(tmp_path, fixturesDir, monkeypatc
 
 def test_pending_sample_points_matches_on_place_and_coordinates():
     points = [SamplePoint("a", 1.0, 2.0, 0), SamplePoint("a", 1.0001, 2.0, 1), SamplePoint("b", 1.0, 2.0, 0)]
-    done = [PanoLookup("a", 1.0, 2.0, "OK", "p", "2020-01", 1.0, 2.0)]
+    done = [PanoLookup("a", 1.0, 2.0, "OK", "p", "2020-01", 1.0, 2.0, copyright="© 2020 Google")]
     assert cli.pendingSamplePoints(points, done) == points[1:]
 
 
@@ -93,7 +93,22 @@ def test_pending_sample_points_retries_error_rows():
     done = [
         PanoLookup("a", 1.0, 2.0, "ERROR", None, None, None, None),
         PanoLookup("a", 1.0001, 2.0, "ZERO_RESULTS", None, None, None, None),
-        PanoLookup("a", 1.0002, 2.0, "OK", "p", "2020-01", 1.0002, 2.0),
+        PanoLookup("a", 1.0002, 2.0, "OK", "p", "2020-01", 1.0002, 2.0, copyright="© 2020 Google"),
+    ]
+    assert cli.pendingSamplePoints(points, done) == [points[0]]
+
+
+def test_pending_sample_points_refills_ok_rows_without_credit():
+    points = [SamplePoint("a", 1.0, 2.0, 0), SamplePoint("a", 1.0001, 2.0, 1), SamplePoint("a", 1.0002, 2.0, 2)]
+    done = [
+        # written before copyright was stored: look it up again
+        PanoLookup("a", 1.0, 2.0, "OK", "p", "2020-01", 1.0, 2.0),
+        # an older uncredited row, then the refill with a credit: done
+        PanoLookup("a", 1.0001, 2.0, "OK", "q", "2020-01", 1.0001, 2.0),
+        PanoLookup("a", 1.0001, 2.0, "OK", "q", "2020-01", 1.0001, 2.0, copyright="© 2020 Google"),
+        # refilled once and the API still gave no credit: done, so reruns stop appending
+        PanoLookup("a", 1.0002, 2.0, "OK", "r", "2020-01", 1.0002, 2.0),
+        PanoLookup("a", 1.0002, 2.0, "OK", "r", "2020-01", 1.0002, 2.0),
     ]
     assert cli.pendingSamplePoints(points, done) == [points[0]]
 

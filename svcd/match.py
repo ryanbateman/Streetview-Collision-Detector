@@ -2,10 +2,12 @@
 
 A collision is a (place, panorama, month) where the user stayed at the place during
 the calendar month (UTC) in which the panorama was photographed. Each collision carries the
-probability that this panorama caught the user (see svcd.scoring); a Candidate groups the
-collisions of one place and month. Pano dates have month granularity, so several panoramas at one
-place in one month are almost always a single drive by one car: the candidate counts only the
-nearest of them, coverage * visibility * max(proximity), rather than treating them as independent.
+probability that this panorama caught the user (see svcd.scoring) and its provenance, Google
+imagery or a user photosphere, taken from the lookup's copyright (see svcd.models.panoSource).
+A Candidate groups the collisions of one place, month and provenance. Pano dates have month
+granularity, so several panoramas of one source at one place in one month are almost always a single
+drive by one car: the candidate counts only the nearest of them, coverage * visibility *
+max(proximity), rather than treating them as independent.
 """
 import logging as log
 from dataclasses import replace
@@ -13,7 +15,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
 
-from svcd.models import KIND_PLACE, Candidate, Collision, PanoLookup, Place, Visit
+from svcd.models import KIND_PLACE, SOURCE_GOOGLE, Candidate, Collision, PanoLookup, Place, Visit, panoSource
 from svcd.places import haversineM, placeKey
 from svcd.scoring import coverage, daylightDwell, proximity, visibility
 from svcd.streetview import buildPanoUrl
@@ -87,7 +89,11 @@ def findCollisions(
     places: Iterable[Place],
     lookups: Iterable[PanoLookup],
 ) -> list[Collision]:
-    """One Collision per (placeKey, panoId, month) with at least one visit in that month."""
+    """One Collision per (placeKey, panoId, month) with at least one visit in that month.
+
+    Each Collision's source is panoSource(copyright) of the lookup kept for that panorama (the one
+    nearest the place centre); provenance is a property of the panorama, so it does not split dedupe.
+    """
     placeByKey = {place.key: place for place in places}
     visitsByKey: dict[str, list[Visit]] = defaultdict(list)
     for visit in visits:
@@ -118,7 +124,10 @@ def findCollisions(
             lat, lng = _panoPosition(lookup)
             distance = haversineM(centreLat, centreLng, lat, lng)
             dedupeKey = (lookup.panoId, panoMonth)
-            if dedupeKey not in best or distance < best[dedupeKey][0]:
+            kept = best.get(dedupeKey)
+            # On a tie (a point looked up again to fill in its credit) prefer the row with a credit.
+            if (kept is None or distance < kept[0]
+                    or (distance == kept[0] and kept[1].copyright is None and lookup.copyright is not None)):
                 best[dedupeKey] = (distance, lookup)
 
         for (panoId, panoMonth), (distance, lookup) in best.items():
@@ -148,6 +157,7 @@ def findCollisions(
                 visibility=placeVisibility,
                 proximity=panoProximity,
                 probability=probability,
+                source=panoSource(lookup.copyright),
             ))
     if missingPlaces:
         log.warning(f"{missingPlaces} places with visits and panoramas have no Place record; "
@@ -160,25 +170,47 @@ def rankCollisions(collisions: Iterable[Collision]) -> list[Collision]:
     return sorted(collisions, key=lambda c: (-c.probability, c.placeKey, c.month, c.panoId))
 
 
-def buildCandidates(collisions: Iterable[Collision], places: Iterable[Place]) -> list[Candidate]:
-    """One Candidate per (placeKey, month), ranked 1..n by probability (ties: placeKey, month).
+def _sourceOrder(source: str) -> int:
+    """Google imagery sorts before user photospheres when probabilities tie."""
+    return 0 if source == SOURCE_GOOGLE else 1
+
+
+def buildCandidates(
+    collisions: Iterable[Collision],
+    places: Iterable[Place],
+    lookups: Iterable[PanoLookup] | None = None,
+) -> list[Candidate]:
+    """One Candidate per (placeKey, month, source), ranked 1..n by probability across both sources
+    (ties: placeKey, month, then source with Google first).
+
+    Google imagery and user photospheres at one place-month are separate Candidates, each holding
+    only its own panoramas, so the map can filter by provenance and every Candidate's odds come from
+    its own panoramas. checkKey is f"{placeKey}|{month}|{source}".
 
     Its probability is coverage * visibility * max(proximity) over its distinct panoramas, which is
     the best panorama's own probability since all of them share the place-month's coverage and
-    visibility. Several panoramas in one month are treated as one drive, not as independent chances.
+    visibility. Several panoramas in one group are treated as one capture, not as independent chances.
     A panorama listed twice keeps its best entry. A collision without a Place record still yields a
     Candidate, centred on its nearest panorama.
+
+    Collisions do not carry the credit line itself; pass the lookups to fill each pano's copyright
+    (by panoId). Without them, or for a panorama not among them, copyright is None.
     """
     placeByKey = {place.key: place for place in places}
-    groups: dict[tuple[str, str], dict[str, Collision]] = defaultdict(dict)
+    copyrightByPano: dict[str, str] = {}
+    for lookup in lookups or ():
+        if lookup.panoId is not None and lookup.copyright is not None:
+            copyrightByPano.setdefault(lookup.panoId, lookup.copyright)
+
+    groups: dict[tuple[str, str, str], dict[str, Collision]] = defaultdict(dict)
     for collision in collisions:
-        byPano = groups[(collision.placeKey, collision.month)]
+        byPano = groups[(collision.placeKey, collision.month, collision.source)]
         known = byPano.get(collision.panoId)
         if known is None or collision.probability > known.probability:
             byPano[collision.panoId] = collision
 
     unranked: list[Candidate] = []
-    for (key, month), byPano in groups.items():
+    for (key, month, source), byPano in groups.items():
         members = sorted(byPano.values(), key=lambda c: (-c.probability, c.distanceM, c.panoId))
         first = members[0]
         place = placeByKey.get(key)
@@ -208,8 +240,12 @@ def buildCandidates(collisions: Iterable[Collision], places: Iterable[Place]) ->
                 "lng": c.panoLng,
                 "distanceM": c.distanceM,
                 "probability": c.probability,
+                "source": c.source,
+                "copyright": copyrightByPano.get(c.panoId),
             } for c in members],
+            source=source,
+            checkKey=f"{key}|{month}|{source}",
         ))
 
-    unranked.sort(key=lambda c: (-c.probability, c.placeKey, c.month))
+    unranked.sort(key=lambda c: (-c.probability, c.placeKey, c.month, _sourceOrder(c.source)))
     return [replace(candidate, rank=rank) for rank, candidate in enumerate(unranked, start=1)]
