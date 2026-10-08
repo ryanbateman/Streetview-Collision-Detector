@@ -82,7 +82,7 @@ A few.
 ```
 .venv\Scripts\python -m pytest -q
 ```
-212 tests, no network needed: aioresponses mocks the API, and a shim in `tests/conftest.py` works around an aioresponses/aiohttp 3.14 incompatibility. The fixtures are synthetic, as they should be.
+230 tests, no network needed: aioresponses mocks the API, and a shim in `tests/conftest.py` works around an aioresponses/aiohttp 3.14 incompatibility. The fixtures are synthetic, as they should be.
 
 [^1]: The deadly snake, not the [gaming peripheral](https://en.wikipedia.org/wiki/List_of_Razer_products), though I can personally vouch that they're okay as mice go. (Mouses? Meese? Mice? Yeah, mice, probably.)
 [^2]: The programming language, not a small snake, though having allies in the animal world is never a bad idea, especially if you're the aforementioned hunter.
