@@ -62,7 +62,7 @@ Each stage reads and writes files, so you can rerun any of them on its own. Glob
   - **Filters.** The text filter sits in a collapsed "Filter" box (name or month, such as 2022-11). Imagery (All / Google only / User photos only) and Checked (All / Unchecked / Checked) are dropdowns. All three combine.
   - **Checked.** Every drawer entry and popup has a "Checked" checkbox, for keeping track of what you have already looked at on Streetview. Checked entries are muted and their markers turn grey. The header reads "N candidates, M checked". Space on a focused entry toggles it; Enter shows it on the map.
   - **Manage checked marks.** A collapsed section holds "Export checked" (downloads `svcd-checked.json`), "Import checked" (merges such a file back in) and "Clear checked" (asks before wiping anything). Checks are keyed by place, month and source, so they survive regenerating `map.html`.
-  - **Sharing mode.** A checkbox in the drawer, off on every load, with an info button beside it that explains what it hides. While on, unnamed places (the ones that would show coordinates or an ID) read "Unknown location" and user-photo contributor credits read "Contributor hidden", in entries, popups and marker tooltips. Use it before taking a screenshot. It does not touch the CSV or the HTML table.
+  - **Sharing mode.** A checkbox in the drawer, off on every load. While on, unnamed places (the ones that would show coordinates or an ID) read "Unknown location" and user-photo contributor credits read "Contributor hidden", in entries, popups and marker tooltips. Use it before taking a screenshot. It does not touch the CSV or the HTML table.
 - `run-all --input PATH` does all four, and accepts the lookup options.
 
 ### How visibility is guessed
