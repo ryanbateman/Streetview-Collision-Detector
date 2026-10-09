@@ -139,8 +139,7 @@
   var byRank = new Map();
   var markers = new Map();
   var iconGrey = new Map();  // rank -> whether the marker currently has the grey (checked) icon
-  data.forEach(function (c, i) {
-    c.bucket = Math.min(2, Math.floor((i * 3) / data.length));
+  data.forEach(function (c) {
     if (!SOURCE_LABELS.hasOwnProperty(c.source)) c.source = "google";
     if (typeof c.checkKey !== "string" || !c.checkKey) c.checkKey = c.placeKey + "|" + c.month + "|" + c.source;
     byRank.set(c.rank, c);
@@ -151,6 +150,10 @@
   var hideBtn = document.getElementById("svcd-hide");
   var list = document.getElementById("svcd-list");
   var filterInput = document.getElementById("svcd-filter");
+  var filterBox = document.getElementById("svcd-filter-box");
+  var filterSummary = document.getElementById("svcd-filter-summary");
+  var sourceSelect = document.getElementById("svcd-source-filter");
+  var checkedSelect = document.getElementById("svcd-checked-filter");
   var prevBtn = document.getElementById("svcd-prev");
   var nextBtn = document.getElementById("svcd-next");
   var pageLabel = document.getElementById("svcd-page");
@@ -282,7 +285,34 @@
   }
 
   function dwellText(c) {
-    return Math.round(c.dwellMinutes) + " min daylight dwell";
+    return Math.round(c.dwellMinutes) + " min in daylight";
+  }
+
+  // The middle dot between parts of a line, as a muted separator.
+  function sep() {
+    return el("span", "svcd-sep", "\u00b7");
+  }
+
+  // Month, then a middle dot, then the odds ("2022-11", dot, "about 1 in 18").
+  function oddsLine(c) {
+    var line = el("div", "svcd-line");
+    line.appendChild(el("span", "svcd-month", c.month));
+    line.appendChild(sep());
+    line.appendChild(el("span", "svcd-odds", c.odds));
+    return line;
+  }
+
+  // Visits and daylight dwell, plus a contributor credit when there is one (already masked).
+  function metaLine(c, credit) {
+    var meta = el("div", "svcd-meta");
+    meta.appendChild(el("span", null, visitsText(c)));
+    meta.appendChild(sep());
+    meta.appendChild(el("span", null, dwellText(c)));
+    if (credit) {
+      meta.appendChild(sep());
+      meta.appendChild(el("span", "svcd-credit", credit));
+    }
+    return meta;
   }
 
   function bestPano(c) {
@@ -314,22 +344,29 @@
 
   function buildPopup(c) {
     var root = el("div", "svcd-popup");
-    root.appendChild(el("b", null, shownName(c)));
-    var src = el("div");
-    src.appendChild(badge(c.source));
-    root.appendChild(src);
-    root.appendChild(el("div", null, "Month: " + c.month));
-    root.appendChild(el("div", "svcd-odds", c.odds));
-    root.appendChild(el("div", null, visitsText(c) + ", " + dwellText(c)));
-    var ul = el("ul");
+    var head = el("div", "svcd-popup-head");
+    var name = shownName(c);
+    var heading = el("h2", null, name);
+    heading.title = name;
+    head.appendChild(heading);
+    head.appendChild(badge(c.source));
+    root.appendChild(head);
+    root.appendChild(oddsLine(c));
+    root.appendChild(metaLine(c, null));
+    var ul = el("ul", "svcd-panos");
     (c.panos || []).forEach(function (p) {
+      // One line per panorama: link, date, distance, badge at the right; a contributor credit
+      // (user photos only) goes on a smaller line underneath.
       var li = el("li");
+      var row = el("div", "svcd-pano-row");
       var url = safeUrl(p.url);
-      li.appendChild(badge(panoSource(c, p)));
-      li.appendChild(url ? externalLink(url, "Open panorama") : el("span", null, "Panorama (no link)"));
-      li.appendChild(document.createTextNode(" " + (p.date || "date unknown") + ", " + Math.round(p.distanceM) + " m"));
+      row.appendChild(url ? externalLink(url, "Open panorama") : el("span", null, "Panorama (no link)"));
+      row.appendChild(el("span", null, p.date || "date unknown"));
+      row.appendChild(el("span", null, Math.round(p.distanceM) + " m"));
+      row.appendChild(badge(panoSource(c, p)));
+      li.appendChild(row);
       var credit = creditText(c, p);
-      if (credit) li.appendChild(el("span", "svcd-credit", credit));
+      if (credit) li.appendChild(el("div", "svcd-credit", credit));
       ul.appendChild(li);
     });
     root.appendChild(ul);
@@ -338,7 +375,7 @@
   }
 
   function markerIcon(c) {
-    var pin = el("span", isChecked(c) ? "svcd-grey" : "svcd-b" + c.bucket);
+    var pin = el("span", isChecked(c) ? "svcd-grey" : "svcd-pin-dot");
     return L.divIcon({
       className: "svcd-pin",
       html: pin,
@@ -351,7 +388,7 @@
   data.forEach(function (c) {
     if (!isFinite(c.lat) || !isFinite(c.lng)) return;
     var marker = L.marker([c.lat, c.lng], { icon: markerIcon(c), title: markerTitle(c) });
-    marker.bindPopup(function () { return buildPopup(c); }, { maxWidth: 300 });
+    marker.bindPopup(function () { return buildPopup(c); }, { maxWidth: 340, minWidth: 280 });
     marker.on("click", function () { selectRank(c.rank, { scroll: true }); });
     markers.set(c.rank, marker);
     iconGrey.set(c.rank, isChecked(c));
@@ -387,9 +424,16 @@
     }
   }
 
-  function setRadio(name, value) {
-    var node = drawer.querySelector('input[name="' + name + '"][value="' + value + '"]');
-    if (node) node.checked = true;
+  function setSelect(select, value) {
+    if (select) select.value = value;
+  }
+
+  // A collapsed filter with text in it still says so on its summary line.
+  function syncFilterSummary() {
+    var on = !!filters.text;
+    var text = on ? "Filter: active" : "Filter";
+    if (filterSummary.textContent !== text) filterSummary.textContent = text;
+    filterSummary.classList.toggle("svcd-filter-on", on);
   }
 
   // Recompute the visible list. A filter change goes back to page 1; a checked toggle keeps the page.
@@ -424,8 +468,7 @@
     if (c.rank === activeRank) li.classList.add("svcd-active");
     if (isChecked(c)) li.classList.add("svcd-checked");
 
-    var title = el("div", "svcd-title");
-    title.appendChild(el("span", "svcd-dot " + (isChecked(c) ? "svcd-grey" : "svcd-b" + c.bucket)));
+    var row = el("div", "svcd-row");
     var rank = el("a", "svcd-rank", "#" + c.rank);
     rank.href = "#rank-" + c.rank;
     rank.title = "Link to this entry";
@@ -434,20 +477,18 @@
       history.replaceState(null, "", "#rank-" + c.rank);
       selectRank(c.rank, { scroll: false });
     });
-    title.appendChild(rank);
-    title.appendChild(el("span", "svcd-name", shownName(c)));
-    title.appendChild(badge(c.source));
-    li.appendChild(title);
+    row.appendChild(rank);
+    var name = shownName(c);
+    var nameNode = el("span", "svcd-name", name);
+    nameNode.title = name;
+    row.appendChild(nameNode);
+    row.appendChild(badge(c.source));
+    li.appendChild(row);
 
-    var meta1 = el("div", "svcd-meta");
-    meta1.appendChild(document.createTextNode(c.month + " · "));
-    meta1.appendChild(el("span", "svcd-odds", c.odds));
-    li.appendChild(meta1);
-    li.appendChild(el("div", "svcd-meta", visitsText(c) + " · " + dwellText(c)));
-
+    var body = el("div", "svcd-body");
+    body.appendChild(oddsLine(c));
     var best = bestPano(c);
-    var credit = best ? creditText(c, best) : null;
-    if (credit) li.appendChild(el("div", "svcd-credit", credit));
+    body.appendChild(metaLine(c, best ? creditText(c, best) : null));
 
     var links = el("div", "svcd-links");
     var show = el("button", null, "Show on map");
@@ -466,7 +507,8 @@
       links.appendChild(more);
     }
     links.appendChild(checkBox(c, "svcd-item-check"));
-    li.appendChild(links);
+    body.appendChild(links);
+    li.appendChild(body);
 
     li.addEventListener("keydown", function (ev) {
       if (ev.target !== li) return;
@@ -500,12 +542,15 @@
     pageLabel.textContent = "Page " + page + " of " + pages;
     prevBtn.disabled = page <= 1;
     nextBtn.disabled = page >= pages;
-    countLabel.textContent = data.length
+    // Set only on change, so the live region does not announce the same count after every redraw.
+    var count = data.length
       ? plural(data.length, "candidate") + ", " + checkedCount() + " checked"
       : "No candidates";
+    if (countLabel.textContent !== count) countLabel.textContent = count;
     statusLabel.textContent = filtered.length === data.length
       ? defaultStatus
       : filtered.length + " of " + data.length + " match the filters.";
+    syncFilterSummary();
   }
 
   // Record or clear one checked mark, then update the list, the open popup and the marker.
@@ -586,8 +631,8 @@
     if (idx < 0) {
       // Clear only the filters that hide this entry.
       if (!matchesText(c)) { filterInput.value = ""; filters.text = ""; }
-      if (!matchesSource(c)) { filters.source = "all"; setRadio("svcd-source", "all"); }
-      if (!matchesChecked(c)) { filters.checked = "all"; setRadio("svcd-checked", "all"); }
+      if (!matchesSource(c)) { filters.source = "all"; setSelect(sourceSelect, "all"); }
+      if (!matchesChecked(c)) { filters.checked = "all"; setSelect(checkedSelect, "all"); }
       refresh(true);
       idx = filtered.indexOf(c);
     }
@@ -700,18 +745,16 @@
 
   // ---------------------------------------------------------------- wiring
 
-  toggleBtn.addEventListener("click", function () { setOpen(true); filterInput.focus(); });
+  toggleBtn.addEventListener("click", function () { setOpen(true); filterSummary.focus(); });
   hideBtn.addEventListener("click", function () { setOpen(false); toggleBtn.focus(); });
   filterInput.addEventListener("input", function () {
     filters.text = String(filterInput.value).trim().toLowerCase();
     refresh(true);
   });
-  drawer.querySelectorAll('input[name="svcd-source"]').forEach(function (radio) {
-    radio.addEventListener("change", function () { filters.source = radio.value; refresh(true); });
-  });
-  drawer.querySelectorAll('input[name="svcd-checked"]').forEach(function (radio) {
-    radio.addEventListener("change", function () { filters.checked = radio.value; refresh(true); });
-  });
+  // Opening the filter puts the cursor in the text box.
+  filterBox.addEventListener("toggle", function () { if (filterBox.open) filterInput.focus(); });
+  sourceSelect.addEventListener("change", function () { filters.source = sourceSelect.value; refresh(true); });
+  checkedSelect.addEventListener("change", function () { filters.checked = checkedSelect.value; refresh(true); });
   exportBtn.addEventListener("click", exportChecked);
   importBtn.addEventListener("click", function () { importFile.value = ""; importFile.click(); });
   importFile.addEventListener("change", function () { importChecked(importFile.files && importFile.files[0]); });
@@ -733,9 +776,9 @@
     narrowMedia.addEventListener("change", function (ev) { setOpen(!ev.matches); });
   }
 
-  // Browsers may restore radio states on reload; start from the defaults so the list matches.
-  setRadio("svcd-source", "all");
-  setRadio("svcd-checked", "all");
+  // Browsers may restore form values on reload; start from the defaults so the list matches.
+  setSelect(sourceSelect, "all");
+  setSelect(checkedSelect, "all");
   filterInput.value = "";
   if (sharingBox) sharingBox.checked = false;  // sharing mode is per view: off after every reload
   if (sharingBadge) sharingBadge.hidden = true;

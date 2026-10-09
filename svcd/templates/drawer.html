@@ -1,43 +1,50 @@
 <button type="button" id="svcd-toggle" aria-controls="svcd-drawer" aria-expanded="false">List (__SVCD_COUNT__)</button>
-<aside id="svcd-drawer" aria-label="Candidates">
+<aside id="svcd-drawer" aria-labelledby="svcd-title">
   <header>
     <div class="svcd-head-row">
-      <h1 id="svcd-count">__SVCD_COUNT_TEXT__</h1>
+      <h1 id="svcd-title">Streetview Finder</h1>
       <span class="svcd-badge svcd-sharing-badge" id="svcd-sharing-badge" title="Unnamed places and contributor credits are hidden" hidden>Sharing mode</span>
       <button type="button" class="svcd-btn" id="svcd-hide" aria-controls="svcd-drawer">Hide</button>
     </div>
-    <p class="svcd-sub" id="svcd-status">Ranked by the chance that a Street View camera caught you.</p>
-    <div class="svcd-legend" aria-label="Marker colours">
-      <span><i class="svcd-b0"></i>top third</span>
-      <span><i class="svcd-b1"></i>middle third</span>
-      <span><i class="svcd-b2"></i>bottom third</span>
-      <span><i class="svcd-grey"></i>checked</span>
+    <p class="svcd-count" id="svcd-count" aria-live="polite">__SVCD_COUNT_TEXT__</p>
+    <p class="svcd-sub" id="svcd-status">Most likely first.</p>
+    <details class="svcd-disclosure" id="svcd-filter-box">
+      <summary id="svcd-filter-summary">Filter</summary>
+      <input type="search" id="svcd-filter" placeholder="Name or month, e.g. 2022-11" aria-label="Filter by name or month" autocomplete="off">
+    </details>
+    <div class="svcd-selects">
+      <div class="svcd-field">
+        <label for="svcd-source-filter">Imagery</label>
+        <select id="svcd-source-filter" name="svcd-source" autocomplete="off">
+          <option value="all" selected>All</option>
+          <option value="google">Google only</option>
+          <option value="user">User photos only</option>
+        </select>
+      </div>
+      <div class="svcd-field">
+        <label for="svcd-checked-filter">Checked</label>
+        <select id="svcd-checked-filter" name="svcd-checked" autocomplete="off">
+          <option value="all" selected>All</option>
+          <option value="unchecked">Unchecked</option>
+          <option value="checked">Checked</option>
+        </select>
+      </div>
     </div>
-    <input type="search" id="svcd-filter" placeholder="Filter by name or month" aria-label="Filter by name or month" autocomplete="off">
-    <fieldset class="svcd-seg" id="svcd-source-filter">
-      <legend>Imagery</legend>
-      <label><input type="radio" name="svcd-source" value="all" checked><span>All</span></label>
-      <label><input type="radio" name="svcd-source" value="google"><span>Google only</span></label>
-      <label><input type="radio" name="svcd-source" value="user"><span>User photos only</span></label>
-    </fieldset>
-    <fieldset class="svcd-seg" id="svcd-checked-filter">
-      <legend>Checked</legend>
-      <label><input type="radio" name="svcd-checked" value="all" checked><span>All</span></label>
-      <label><input type="radio" name="svcd-checked" value="unchecked"><span>Unchecked</span></label>
-      <label><input type="radio" name="svcd-checked" value="checked"><span>Checked</span></label>
-    </fieldset>
     <label class="svcd-sharing" title="Hide unnamed places and contributor credits before taking a screenshot">
       <input type="checkbox" id="svcd-sharing" autocomplete="off"> Sharing mode
     </label>
-    <div class="svcd-actions">
-      <button type="button" class="svcd-btn" id="svcd-export">Export checked</button>
-      <button type="button" class="svcd-btn" id="svcd-import">Import checked</button>
-      <button type="button" class="svcd-btn" id="svcd-clear">Clear checked</button>
-      <input type="file" id="svcd-import-file" accept=".json,application/json" hidden>
-    </div>
+    <details class="svcd-disclosure svcd-manage" id="svcd-manage">
+      <summary>Manage checked marks</summary>
+      <div class="svcd-actions">
+        <button type="button" class="svcd-btn" id="svcd-export">Export checked</button>
+        <button type="button" class="svcd-btn" id="svcd-import">Import checked</button>
+        <button type="button" class="svcd-btn" id="svcd-clear">Clear checked</button>
+        <input type="file" id="svcd-import-file" accept=".json,application/json" hidden>
+      </div>
+    </details>
     <p class="svcd-note" id="svcd-note" role="status" aria-live="polite"></p>
   </header>
-  <ul id="svcd-list">__SVCD_EMPTY__</ul>
+  <ul id="svcd-list" aria-label="Candidates, most likely first">__SVCD_EMPTY__</ul>
   <nav class="svcd-pager" aria-label="Pages">
     <button type="button" id="svcd-prev">Prev</button>
     <span id="svcd-page" aria-live="polite">Page 1 of 1</span>

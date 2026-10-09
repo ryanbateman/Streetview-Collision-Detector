@@ -183,6 +183,29 @@ def testBuildMapEmbedsDataAndDrawer(tmp_path):
     assert "—" not in page  # no em-dashes
 
 
+def testBuildMapDrawerLayout(tmp_path):
+    path = tmp_path / "map.html"
+    buildMap([makeCandidate(1, 0.3), makeUserCandidate(2, 0.2)], path)
+    page = path.read_text(encoding="utf-8")
+    drawer = page.split('id="svcd-drawer"')[1].split("</aside>")[0]
+    assert '<h1 id="svcd-title">Streetview Finder</h1>' in drawer
+    assert 'id="svcd-count" aria-live="polite">2 candidates</p>' in drawer
+    # the name/month filter is collapsed by default and says when it is active
+    assert '<details class="svcd-disclosure" id="svcd-filter-box">' in drawer
+    assert '<summary id="svcd-filter-summary">Filter</summary>' in drawer and "Filter: active" in page
+    assert drawer.index('id="svcd-filter-box"') < drawer.index('id="svcd-filter"') < drawer.index("</details>")
+    assert "Manage checked marks" in drawer
+    # the rank-third legend and colours are gone; one marker colour plus grey for checked
+    for gone in ("top third", "middle third", "bottom third", "svcd-legend", "svcd-b0", "bucket"):
+        assert gone not in page
+    assert "svcd-pin-dot" in page and "svcd-grey" in page
+    assert "Ranked by" not in drawer and "ranking" not in drawer.lower()
+    # one font stack and tabular numerals; popup styles are scoped
+    assert '-apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif' in page
+    assert "tabular-nums" in page and ".leaflet-container .svcd-popup" in page
+    assert "min in daylight" in page and "maxWidth: 340" in page
+
+
 def testBuildMapReferencesFoliumObjects(tmp_path):
     path = tmp_path / "map.html"
     buildMap([makeCandidate(1, 0.2)], path)
@@ -215,13 +238,19 @@ def testBuildMapProvenanceAndCheckedState(tmp_path):
 
     for text in ("svcd-checked", "Export checked", "Import checked", "Clear checked", "User photo", "Google"):
         assert text in page
-    # three-way provenance control and the checked filter
-    assert 'id="svcd-source-filter"' in page
+    # three-way provenance dropdown and the checked dropdown, each with a visible label
+    assert '<select id="svcd-source-filter"' in page and '<label for="svcd-source-filter">Imagery</label>' in page
     for value in ("all", "google", "user"):
-        assert f'name="svcd-source" value="{value}"' in page
+        assert f'<option value="{value}"' in page
     assert "Google only" in page and "User photos only" in page
-    for value in ("all", "unchecked", "checked"):
-        assert f'name="svcd-checked" value="{value}"' in page
+    assert '<select id="svcd-checked-filter"' in page and '<label for="svcd-checked-filter">Checked</label>' in page
+    for value in ("unchecked", "checked"):
+        assert f'<option value="{value}">' in page
+    assert 'type="radio"' not in page
+    # the export, import and clear buttons sit in a collapsed disclosure
+    manage = page.split('id="svcd-manage"')[1].split("</details>")[0]
+    assert "<summary>Manage checked marks</summary>" in manage and 'id="svcd-export"' in manage
+    assert '<details class="svcd-disclosure svcd-manage" id="svcd-manage">' in page  # no open attribute
     assert "svcd-checked.json" in page and "localStorage" in page and "confirm(" in page
 
     records = {r["rank"]: r for r in json.loads(dataBlob(page))}
