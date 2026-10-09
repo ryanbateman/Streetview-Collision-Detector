@@ -12,17 +12,19 @@ When it does find that you were somewhere in the same month as the Streetview ph
 ## Does it work?
 Well, yes and no. Google Streetview photos only show the month they were taken, not the day, so it gives you a better chance to spot yourself, definitely, but it's still not precise. And you'll still need to wander around Streetview to find yourself. But this will at least help target your search somewhat.
 
-The list is ranked by probability rather than by how long you stayed. For each place and month, the chance that a panorama caught you is coverage x visibility x proximity: how much of that month's daylight you spent there, how likely you were to be outdoors and in view, and how close the panorama sits to the place. Only the nearest panorama counts: the API gives just the month, so several panoramas at one place in one month are treated as one drive by one car, not as separate chances. (Google's own imagery and photospheres uploaded by Maps contributors are ranked separately, so a place can appear twice for one month; see the gotchas.) This is why your home drops down the list: you were indoors, and the Street View car does not drive at night. A park you strolled through twice now beats the flat you slept in for thirty nights.
+This bit is written by AI, to describe how it opted to rank them. It is a bit silly, I think, but fine.
+_The list is ranked by probability rather than by how long you stayed. For each place and month, the chance that a panorama caught you is coverage x visibility x proximity: how much of that month's daylight you spent there, how likely you were to be outdoors and in view, and how close the panorama sits to the place. Only the nearest panorama counts: the API gives just the month, so several panoramas at one place in one month are treated as one drive by one car, not as separate chances. (Google's own imagery and photospheres uploaded by Maps contributors are ranked separately, so a place can appear twice for one month; see the gotchas.) This is why your home drops down the list: you were indoors, and the Street View car does not drive at night. A park you strolled through twice now beats the flat you slept in for thirty nights._
 
 ## Okay. Is it difficult to get working?
-Somewhat. You need a fair amount of technical expertise or be quite patient and Google things.
+~~Somewhat. You need a fair amount of technical expertise or be quite patient and Google things.~~
+It's a lot easier now. Originally hand-written and a bit fiddly, an LLM tidied it up and now it should run quite simply. Alternatively, point an LLM at this repo and it should figure it out.
 
 ## So what do I need to know ahead of time?
 Firstly, you will need to have had Location History (now called Timeline) enabled, with some history for this tool to look at. The quickest way to check is your [Google Maps Timeline](https://support.google.com/maps/answer/6258979?hl=en&co=GENIE.Platform%3DDesktop), which will confirm that Google has been intently tracking you, much as a deranged hunter would track a boomslang[^1] across the Africa veldt.
 
 You'll also need a [Google Maps Static API key](https://developers.google.com/maps/documentation/maps-static/get-api-key), so you'll need to know how to navigate Google's Developer Console. The Street View metadata requests this tool makes are free of charge and consume no quota, according to Google's documentation.
 
-You'll also need to know a little Python[^2] (3.11 or newer) and a little git[^3].
+~~You'll also need to know a little Python[^2] (3.11 or newer) and a little git[^3].~~
 
 ## Hardly seems worth it.
 Fair.
@@ -34,8 +36,6 @@ Google moved Timeline on to your phone in 2024, and new [Google Takeout](https:/
 - **Phone export.** Otherwise, on your phone go to Google Maps, your profile, Your Timeline, and export. You get a `Timeline.json` or `location-history.json`. This format is supported, but so far it has only been tested against synthetic fixtures. Expect rough edges.
 
 Both formats also contribute walking, running and cycling activity segments: each point on such a path becomes a visit, because being on foot or on a bike is the likeliest way to end up in a photo. Other transport modes are ignored. The old export's activity segments are used this way; `Records.json` (the raw GPS pings) is still deliberately not read. The place visits and paths are enough, and the raw file is enormous.
-
-Google's own labels are kept too: the semantic type (home or work) and whether a visit was a main stop or merely transitional. The likelihood model uses both.
 
 ## How do I get started then?
 Clone this repo (the one you're looking at right now) and set up an environment. On Windows:
@@ -66,20 +66,21 @@ Each stage reads and writes files, so you can rerun any of them on its own. Glob
   - **Sharing mode.** A checkbox in the drawer, off on every load. While on, unnamed places (the ones that would show coordinates or an ID) read "Unknown location" and user-photo contributor credits read "Contributor hidden", in entries, popups and marker tooltips. Use it before taking a screenshot. It does not touch the CSV or the HTML table.
 - `run-all --input PATH` does all four, and accepts the lookup options.
 
-### How visibility is guessed
-Visibility is a prior, not a measurement: 0.9 for places that come from a walking, running or cycling path; 0.1 for home or work (from Google's semantic type); 0.7 for names with outdoor words (park, platz, strand, bahnhof, markt, zoo and so on; most match at the end of a word so German compounds like Volkspark count, while Supermarkt, Parkhaus and Kindergarten do not; the list is English and German only, so place names in other languages fall back to the default unless you extend it) or for transitional visits; 0.5 where your typical stay is under 15 minutes; 0.3 otherwise. Coverage uses 07:00 to 19:00 solar time, estimated from longitude alone, with night-time dwell counted at 5 percent. Proximity is `exp(-distance / 40 m)` from the place centre to the panorama. The constants live at the top of `svcd/scoring.py` if you disagree.
+### How visibility is guessed#
+AI wrote this, so it sounds dumb. It is, kinda, but it's fine for the purposes of this.
+_Visibility is a prior, not a measurement: 0.9 for places that come from a walking, running or cycling path; 0.1 for home or work (from Google's semantic type); 0.7 for names with outdoor words (park, platz, strand, bahnhof, markt, zoo and so on; most match at the end of a word so German compounds like Volkspark count, while Supermarkt, Parkhaus and Kindergarten do not; the list is English and German only, so place names in other languages fall back to the default unless you extend it) or for transitional visits; 0.5 where your typical stay is under 15 minutes; 0.3 otherwise. Coverage uses 07:00 to 19:00 solar time, estimated from longitude alone, with night-time dwell counted at 5 percent. Proximity is `exp(-distance / 40 m)` from the place centre to the panorama. The constants live at the top of `svcd/scoring.py` if you disagree._
 
 ## Any gotchas?
 A few.
-- Only the *current* panorama at each point is checked. Google does not expose historical imagery through the API, so if a street was re-photographed after your visit, the older panorama is invisible to this tool.
-- Panorama dates have month granularity. You still have to wander around Streetview yourself.
+- Only the *current* panorama at each point is checked. Google does not expose historical imagery through the API, so if a street was re-photographed after your visit, the older panorama is invisible to this tool. 
+- Panorama dates have month granularity. You still have to wander around Streetview panorama's yourself to check whether time/locations are accurate.
 - The probabilities are rough priors, not calibrated. Treat the ranking as an ordering, and the "about 1 in N" figures as the right order of magnitude at best. The expected number of finds that `match` logs tells you how much to hope for; it is usually small.
 - The map defaults to Esri's street tiles because OpenStreetMap's tile server refuses requests without a Referer header, which is what you get when you open `output/map.html` straight from disk. OpenStreetMap and Carto are still in the layer control; OpenStreetMap works if you serve the folder instead, for example `python -m http.server -d output 8000` and then open http://localhost:8000/map.html.
-- User photospheres rank high and deserve suspicion. The metadata response includes a credit line: Google's own car, trekker and backpack imagery is credited to Google, while a photosphere uploaded by a Maps contributor is credited to that contributor. The tool stores the credit, classifies each panorama as Google or user, and ranks each place and month separately per source, so the odds are computed for each. In one test dataset, more than a third of the panoramas found were user photospheres. Contributors tend to photograph venue interiors and entrances, which are places you visited and were visible, so user photos can take over the top of the ranking and push the best Google car imagery well down the list. The Imagery filter is there for that reason. A user photosphere is a single still moment taken by a person, usually at or inside a venue, so the daylight car drive that the odds model assumes fits it less well. Treat its odds as rougher still.
+- _User photospheres rank high and deserve suspicion. The metadata response includes a credit line: Google's own car, trekker and backpack imagery is credited to Google, while a photosphere uploaded by a Maps contributor is credited to that contributor. The tool stores the credit, classifies each panorama as Google or user, and ranks each place and month separately per source, so the odds are computed for each. In one test dataset, more than a third of the panoramas found were user photospheres. Contributors tend to photograph venue interiors and entrances, which are places you visited and were visible, so user photos can take over the top of the ranking and push the best Google car imagery well down the list. The Imagery filter is there for that reason. A user photosphere is a single still moment taken by a person, usually at or inside a venue, so the daylight car drive that the odds model assumes fits it less well. Treat its odds as rougher still._
 - Checked state lives in your browser's localStorage (key `svcd-checked`), which is per browser and per origin. Open `map.html` in a different browser, or from a different path, and it starts empty. If you care about what you have ticked off, use "Export checked" and import it where needed.
 - `cache/streetview.sqlite` contains your API key inside the stored request URLs. It is gitignored. Do not share it.
 - `data/`, `output/`, `cache/` and `takeout/` are gitignored because they hold your personal location data. Keep it that way.
-- And, uh, I'm not a Python developer. Or a developer at all. So, you know, it could all break. (PRs welcomed.)
+- And, uh, I'm not a Python developer. Or a developer at all. So, you know, it could all break. (PRs welcomed.) While I originally wrote it by hand, I have since given it to a LLM to tidy up. I feel weird about that, as I do about most development and AI in general these days.
 
 ## Tests
 ```
