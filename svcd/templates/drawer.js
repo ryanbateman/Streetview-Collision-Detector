@@ -166,6 +166,8 @@
   var clearBtn = document.getElementById("svcd-clear");
   var sharingBox = document.getElementById("svcd-sharing");
   var sharingBadge = document.getElementById("svcd-sharing-badge");
+  var sharingInfo = document.getElementById("svcd-sharing-info");
+  var sharingHelp = document.getElementById("svcd-sharing-help");
   if (!drawer) return;  // no drawer markup (the test harness): helpers only
   var defaultStatus = statusLabel.textContent;
 
@@ -355,15 +357,14 @@
     root.appendChild(metaLine(c, null));
     var ul = el("ul", "svcd-panos");
     (c.panos || []).forEach(function (p) {
-      // One line per panorama: link, date, distance, badge at the right; a contributor credit
-      // (user photos only) goes on a smaller line underneath.
+      // One line per panorama: link, date, distance. The heading badge gives the source, which all
+      // of a candidate's panoramas share; a contributor credit (user photos only) goes underneath.
       var li = el("li");
       var row = el("div", "svcd-pano-row");
       var url = safeUrl(p.url);
       row.appendChild(url ? externalLink(url, "Open panorama") : el("span", null, "Panorama (no link)"));
       row.appendChild(el("span", null, p.date || "date unknown"));
       row.appendChild(el("span", null, Math.round(p.distanceM) + " m"));
-      row.appendChild(badge(panoSource(c, p)));
       li.appendChild(row);
       var credit = creditText(c, p);
       if (credit) li.appendChild(el("div", "svcd-credit", credit));
@@ -447,11 +448,23 @@
   // ---------------------------------------------------------------- drawer
 
   function setOpen(open) {
+    if (!open) setHelpOpen(false);
     document.body.classList.toggle("svcd-open", open);
     toggleBtn.setAttribute("aria-expanded", String(open));
     drawer.inert = !open;
     map.invalidateSize();
     setTimeout(function () { map.invalidateSize(); }, 250);
+  }
+
+  // The sharing mode info popover under its "i" button.
+  function helpOpen() {
+    return !!sharingHelp && !sharingHelp.hidden;
+  }
+
+  function setHelpOpen(open) {
+    if (!sharingInfo || !sharingHelp) return;
+    sharingHelp.hidden = !open;
+    sharingInfo.setAttribute("aria-expanded", String(open));
   }
 
   function restartAnimation(node, className) {
@@ -760,6 +773,17 @@
   importFile.addEventListener("change", function () { importChecked(importFile.files && importFile.files[0]); });
   clearBtn.addEventListener("click", clearChecked);
   if (sharingBox) sharingBox.addEventListener("change", function () { setSharing(sharingBox.checked); });
+  if (sharingInfo) sharingInfo.addEventListener("click", function () { setHelpOpen(!helpOpen()); });
+  // The popover closes on Escape or on a click anywhere outside it and its button.
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key !== "Escape" || !helpOpen()) return;
+    setHelpOpen(false);
+    if (drawer.contains(document.activeElement)) sharingInfo.focus();
+  });
+  document.addEventListener("click", function (ev) {
+    if (!helpOpen() || sharingInfo.contains(ev.target) || sharingHelp.contains(ev.target)) return;
+    setHelpOpen(false);
+  });
   prevBtn.addEventListener("click", function () { page -= 1; renderList(); });
   nextBtn.addEventListener("click", function () { page += 1; renderList(); });
   window.addEventListener("hashchange", fromHash);

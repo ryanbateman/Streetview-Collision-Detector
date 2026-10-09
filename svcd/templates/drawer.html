@@ -30,9 +30,15 @@
         </select>
       </div>
     </div>
-    <label class="svcd-sharing" title="Hide unnamed places and contributor credits before taking a screenshot">
-      <input type="checkbox" id="svcd-sharing" autocomplete="off"> Sharing mode
-    </label>
+    <div class="svcd-sharing-row">
+      <label class="svcd-sharing" title="Hide unnamed places and contributor credits before taking a screenshot">
+        <input type="checkbox" id="svcd-sharing" autocomplete="off"> Sharing mode
+      </label>
+      <button type="button" class="svcd-info" id="svcd-sharing-info" aria-label="What sharing mode does" aria-expanded="false" aria-controls="svcd-sharing-help">i</button>
+      <div class="svcd-popover" id="svcd-sharing-help" role="note" hidden>
+        <p>Sharing mode hides details so you can share a screenshot. Places without a name show as Unknown location and contributor names on user photos show as Contributor hidden. It is off every time the page loads and changes nothing in the data.</p>
+      </div>
+    </div>
     <details class="svcd-disclosure svcd-manage" id="svcd-manage">
       <summary>Manage checked marks</summary>
       <div class="svcd-actions">

@@ -275,6 +275,19 @@ def testBuildMapHasSharingMode(tmp_path):
     for text in ("Sharing mode", 'id="svcd-sharing"', 'id="svcd-sharing-badge"', "Unknown location",
                  "Contributor hidden"):
         assert text in page
+    # the info button and its popover explain the toggle
+    assert 'aria-label="What sharing mode does"' in page
+    assert 'role="note"' in page
+    assert "Sharing mode hides details so you can share a screenshot." in page
+
+
+def testBuildMapPopupHasOneSourceBadge(tmp_path):
+    path = tmp_path / "map.html"
+    buildMap([makeUserCandidate(1, 0.2)], path)
+    page = path.read_text(encoding="utf-8")
+    # the popup heading carries the badge; panorama rows no longer repeat it
+    assert "head.appendChild(badge(c.source));" in page
+    assert "badge(panoSource(" not in page
 
 
 def testBuildMapEmptyHasNoHeatLayer(tmp_path):

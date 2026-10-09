@@ -18,6 +18,7 @@
   --svcd-user-fg: #7a4a00;
   --svcd-user-bg: #fdf3e2;
   --svcd-user-border: #e3c08a;
+  --svcd-shadow: 0 4px 12px rgba(0, 0, 0, 0.14);
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -36,6 +37,7 @@
     --svcd-user-fg: #f2c98a;
     --svcd-user-bg: #33281a;
     --svcd-user-border: #7a5a2a;
+    --svcd-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
   }
 }
 
@@ -90,8 +92,24 @@ body.svcd-open #svcd-drawer { transform: none; }
   color: var(--svcd-fg); background: var(--svcd-field);
   border: 1px solid var(--svcd-border); border-radius: 6px;
 }
-.svcd-sharing { display: flex; width: fit-content; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; cursor: pointer; }
+.svcd-sharing-row { position: relative; display: flex; width: fit-content; align-items: center; gap: 6px; margin: 0 0 8px; }
+.svcd-sharing { display: flex; width: fit-content; align-items: center; gap: 8px; margin: 0; font-size: 13px; font-weight: 400; cursor: pointer; }
 .svcd-sharing input { margin: 0; }
+.svcd-info {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; padding: 0; cursor: pointer;
+  font: 700 11px/1 var(--svcd-font); color: var(--svcd-muted); background: transparent;
+  border: 1px solid var(--svcd-muted); border-radius: 50%;
+}
+.svcd-info:hover, .svcd-info[aria-expanded="true"] { color: var(--svcd-accent); border-color: var(--svcd-accent); }
+.svcd-popover {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10;
+  width: max-content; max-width: 260px; padding: 8px 10px;
+  font-size: 12px; line-height: 1.4; color: var(--svcd-fg); background: var(--svcd-bg);
+  border: 1px solid var(--svcd-border); border-radius: 6px; box-shadow: var(--svcd-shadow);
+}
+.svcd-popover[hidden] { display: none; }
+.svcd-popover p { margin: 0; }
 .svcd-manage { margin: 0; }
 .svcd-manage > summary { color: var(--svcd-muted); font-weight: 400; font-size: 12px; }
 .svcd-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 0; }
@@ -204,7 +222,6 @@ body.svcd-open #svcd-toggle { display: none; }
 .leaflet-container .svcd-popup .svcd-panos li { margin: 0; font-size: 12px; color: #5c6670; }
 .leaflet-container .svcd-popup .svcd-panos li + li { margin-top: 4px; }
 .leaflet-container .svcd-popup .svcd-pano-row { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-.leaflet-container .svcd-popup .svcd-pano-row .svcd-badge { margin: 0 0 0 auto; }
 .leaflet-container .svcd-popup .svcd-panos .svcd-credit {
   margin-top: 1px; font-size: 11px; color: #5c6670; white-space: normal; overflow-wrap: anywhere;
 }
