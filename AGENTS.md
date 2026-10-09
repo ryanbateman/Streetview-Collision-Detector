@@ -21,7 +21,8 @@ Runtime dependencies are pinned in `requirements.txt`; `requirements-dev.txt` ad
 ## Build/Run Commands
 
 ```bash
-# Windows (Unix: python3 -m venv .venv, .venv/bin/pip, export GMAPS_STATIC_API_KEY=...)
+# Windows shown; on Linux or macOS use python3 -m venv .venv, .venv/bin/pip, .venv/bin/python
+# and export GMAPS_STATIC_API_KEY=... in place of every .venv\Scripts\... and set ... below.
 py -3.11 -m venv .venv
 .venv\Scripts\pip install -r requirements-dev.txt
 set GMAPS_STATIC_API_KEY=your_key
@@ -42,6 +43,7 @@ Global options go before the stage: `--data-dir data`, `--output-dir output`, `-
 
 ```bash
 .venv\Scripts\python -m pytest -q                              # All 234 tests (no network; tests/test_drawer_js.py needs node, else skipped)
+.venv/bin/python -m pytest -q                                  # Same on Linux or macOS
 .venv\Scripts\python -m pytest tests/test_match.py             # One file
 .venv\Scripts\python -m pytest tests/test_match.py::test_name  # One test
 .venv\Scripts\python -m pytest -v                              # Verbose output

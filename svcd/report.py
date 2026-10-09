@@ -201,7 +201,7 @@ def _renderHtml(ranked: list[Candidate]) -> str:
         header = "".join(f"<th>{name}</th>" for name in _TABLE_HEADERS)
         rows = "\n".join(_tableRow(c) for c in ranked)
         body = (
-            f"<p>{len(ranked)} candidates, ranked by the chance that a Street View camera caught you.</p>\n"
+            f"<p>{len(ranked)} candidates, most likely first.</p>\n"
             f"<table>\n<thead><tr>{header}</tr></thead>\n<tbody>\n{rows}\n</tbody>\n</table>\n"
             f"<script>{_SORT_SCRIPT}</script>"
         )

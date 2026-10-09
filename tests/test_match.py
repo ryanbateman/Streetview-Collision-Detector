@@ -18,7 +18,7 @@ from svcd.places import buildPlaces
 from svcd.scoring import coverage, proximity, visibility
 
 UTC = timezone.utc
-LAT, LNG = 52.48568, 13.37656
+LAT, LNG = 52.5163, 13.3777  # Brandenburg Gate, a landmark used across the fixtures
 KEY = "place-1"
 GOOGLE_CREDIT = "\u00a9 Google"
 USER_CREDIT = "\u00a9 Jane Contributor"

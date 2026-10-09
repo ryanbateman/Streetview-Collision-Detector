@@ -49,6 +49,7 @@ Then run the whole thing:
 ```
 .venv\Scripts\python -m svcd.cli run-all --input takeout
 ```
+On Linux or macOS the same command is `.venv/bin/python -m svcd.cli run-all --input takeout`; every `.venv\Scripts\python` below has a `.venv/bin/python` twin.
 `--input` is either the Takeout folder (or its "Location History (Timeline)" or "Semantic Location History" subfolder), or the phone's `Timeline.json` / `location-history.json`. Open `output/map.html` and `output/candidates.html` when it finishes.
 
 ## The stages
@@ -64,7 +65,7 @@ Each stage reads and writes files, so you can rerun any of them on its own. Glob
 - `run-all --input PATH` does all four, and accepts the lookup options.
 
 ### How visibility is guessed
-Visibility is a prior, not a measurement: 0.9 for places that come from a walking, running or cycling path; 0.1 for home or work (from Google's semantic type); 0.7 for names with outdoor words (park, platz, strand, bahnhof, markt, zoo and so on; most match at the end of a word so German compounds like Volkspark count, while Supermarkt, Parkhaus and Kindergarten do not) or for transitional visits; 0.5 where your typical stay is under 15 minutes; 0.3 otherwise. Coverage uses 07:00 to 19:00 solar time, estimated from longitude alone, with night-time dwell counted at 5 percent. Proximity is `exp(-distance / 40 m)` from the place centre to the panorama. The constants live at the top of `svcd/scoring.py` if you disagree.
+Visibility is a prior, not a measurement: 0.9 for places that come from a walking, running or cycling path; 0.1 for home or work (from Google's semantic type); 0.7 for names with outdoor words (park, platz, strand, bahnhof, markt, zoo and so on; most match at the end of a word so German compounds like Volkspark count, while Supermarkt, Parkhaus and Kindergarten do not; the list is English and German only, so place names in other languages fall back to the default unless you extend it) or for transitional visits; 0.5 where your typical stay is under 15 minutes; 0.3 otherwise. Coverage uses 07:00 to 19:00 solar time, estimated from longitude alone, with night-time dwell counted at 5 percent. Proximity is `exp(-distance / 40 m)` from the place centre to the panorama. The constants live at the top of `svcd/scoring.py` if you disagree.
 
 ## Any gotchas?
 A few.
@@ -72,7 +73,7 @@ A few.
 - Panorama dates have month granularity. You still have to wander around Streetview yourself.
 - The probabilities are rough priors, not calibrated. Treat the ranking as an ordering, and the "about 1 in N" figures as the right order of magnitude at best. The expected number of finds that `match` logs tells you how much to hope for; it is usually small.
 - The map defaults to Esri's street tiles because OpenStreetMap's tile server refuses requests without a Referer header, which is what you get when you open `output/map.html` straight from disk. OpenStreetMap and Carto are still in the layer control; OpenStreetMap works if you serve the folder instead, for example `python -m http.server -d output 8000` and then open http://localhost:8000/map.html.
-- User photospheres rank high and deserve suspicion. The metadata response includes a credit line: Google's own car, trekker and backpack imagery is credited to Google, while a photosphere uploaded by a Maps contributor is credited to that contributor. The tool stores the credit, classifies each panorama as Google or user, and ranks each place and month separately per source, so the odds are computed for each. About 37 percent of the panoramas found on the author's data were user photospheres. Contributors tend to photograph venue interiors and entrances, which are places you visited and were visible, so user photos took over the top of the ranking: the first 11 were user photos and the best Google car imagery was rank 12. The Imagery filter is there for that reason. A user photosphere is a single still moment taken by a person, usually at or inside a venue, so the daylight car drive that the odds model assumes fits it less well. Treat its odds as rougher still.
+- User photospheres rank high and deserve suspicion. The metadata response includes a credit line: Google's own car, trekker and backpack imagery is credited to Google, while a photosphere uploaded by a Maps contributor is credited to that contributor. The tool stores the credit, classifies each panorama as Google or user, and ranks each place and month separately per source, so the odds are computed for each. In one test dataset, more than a third of the panoramas found were user photospheres. Contributors tend to photograph venue interiors and entrances, which are places you visited and were visible, so user photos can take over the top of the ranking and push the best Google car imagery well down the list. The Imagery filter is there for that reason. A user photosphere is a single still moment taken by a person, usually at or inside a venue, so the daylight car drive that the odds model assumes fits it less well. Treat its odds as rougher still.
 - Checked state lives in your browser's localStorage (key `svcd-checked`), which is per browser and per origin. Open `map.html` in a different browser, or from a different path, and it starts empty. If you care about what you have ticked off, use "Export checked" and import it where needed.
 - `cache/streetview.sqlite` contains your API key inside the stored request URLs. It is gitignored. Do not share it.
 - `data/`, `output/`, `cache/` and `takeout/` are gitignored because they hold your personal location data. Keep it that way.
@@ -82,6 +83,7 @@ A few.
 ```
 .venv\Scripts\python -m pytest -q
 ```
+(`.venv/bin/python -m pytest -q` on Linux or macOS.)
 234 tests, no network needed: aioresponses mocks the API, and a shim in `tests/conftest.py` works around an aioresponses/aiohttp 3.14 incompatibility. The fixtures are synthetic, as they should be.
 
 [^1]: The deadly snake, not the [gaming peripheral](https://en.wikipedia.org/wiki/List_of_Razer_products), though I can personally vouch that they're okay as mice go. (Mouses? Meese? Mice? Yeah, mice, probably.)
