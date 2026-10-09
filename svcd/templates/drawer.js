@@ -11,6 +11,8 @@
   var NO_STORAGE = "Checked marks cannot be saved in this browser; export them before closing the page.";
   var CORRUPT_NOTE = "Saved checks could not be read; a backup was kept as " + BACKUP_KEY;
   var CORRUPT_NO_BACKUP = "Saved checks could not be read, and no backup could be kept.";
+  var MASKED_NAME = "Unknown location";
+  var MASKED_CREDIT = "Contributor hidden";
   var lastBackup = null;  // raw value most recently copied to BACKUP_KEY, so it is copied once
 
   // ---------------------------------------------------------------- checked store (pure helpers)
@@ -79,12 +81,24 @@
     return parsed.store;
   }
 
-  function displayName(c) {
-    return c.name || c.placeKey || "Unnamed place";
+  // The name shown for a candidate. Without a name the place key is shown (a path:lat,lng key, bare
+  // coordinates or a placeId), which sharing mode replaces so a screenshot does not give it away.
+  function displayName(c, sharing) {
+    if (c.name) return c.name;
+    if (sharing) return MASKED_NAME;
+    return c.placeKey || "Unnamed place";
   }
 
+  // A credit line as shown. Sharing mode hides a contributor's name; a Google credit is kept.
+  function displayCredit(credit, sharing) {
+    if (typeof credit !== "string" || !credit.trim()) return null;
+    if (sharing && !/google/i.test(credit)) return MASKED_CREDIT;
+    return credit;
+  }
+
+  // The text filter always matches the real name, so turning sharing mode on does not change the list.
   function textMatches(c, q) {
-    return !q || displayName(c).toLowerCase().includes(q) || String(c.month).toLowerCase().includes(q);
+    return !q || displayName(c, false).toLowerCase().includes(q) || String(c.month).toLowerCase().includes(q);
   }
 
   function sourceMatches(c, source) {
@@ -104,7 +118,8 @@
   // Exposed for tests (tests/test_drawer_js.py); the page itself does not use this.
   window.__svcd = {
     validStore: validStore, parseStore: parseStore, loadChecked: loadChecked, mergeStore: mergeStore,
-    matchesFilters: matchesFilters, STORE_KEY: STORE_KEY, BACKUP_KEY: BACKUP_KEY
+    matchesFilters: matchesFilters, displayName: displayName, displayCredit: displayCredit,
+    STORE_KEY: STORE_KEY, BACKUP_KEY: BACKUP_KEY
   };
 
   var map = __SVCD_MAP__;
@@ -146,6 +161,8 @@
   var importBtn = document.getElementById("svcd-import");
   var importFile = document.getElementById("svcd-import-file");
   var clearBtn = document.getElementById("svcd-clear");
+  var sharingBox = document.getElementById("svcd-sharing");
+  var sharingBadge = document.getElementById("svcd-sharing-badge");
   if (!drawer) return;  // no drawer markup (the test harness): helpers only
   var defaultStatus = statusLabel.textContent;
 
@@ -155,6 +172,7 @@
   var markerTimer = null;
   var filters = { text: "", source: "all", checked: "all" };
   var shownOnMap = new Set();  // ranks whose markers are in the cluster
+  var sharing = false;  // sharing mode masks unnamed places and contributor credits; never persisted
 
   // ---------------------------------------------------------------- checked state
 
@@ -241,10 +259,18 @@
     return SOURCE_LABELS.hasOwnProperty(p.source) ? p.source : c.source;
   }
 
-  // Credit line for a user photo, or null; shown as text only.
+  // Credit line for a user photo as shown (masked in sharing mode), or null; shown as text only.
   function creditText(c, p) {
     if (panoSource(c, p) !== "user") return null;
-    return typeof p.copyright === "string" && p.copyright.trim() ? p.copyright : null;
+    return displayCredit(p.copyright, sharing);
+  }
+
+  function shownName(c) {
+    return displayName(c, sharing);
+  }
+
+  function markerTitle(c) {
+    return shownName(c) + " (" + c.month + ")";
   }
 
   function plural(n, word) {
@@ -288,7 +314,7 @@
 
   function buildPopup(c) {
     var root = el("div", "svcd-popup");
-    root.appendChild(el("b", null, displayName(c)));
+    root.appendChild(el("b", null, shownName(c)));
     var src = el("div");
     src.appendChild(badge(c.source));
     root.appendChild(src);
@@ -324,7 +350,7 @@
 
   data.forEach(function (c) {
     if (!isFinite(c.lat) || !isFinite(c.lng)) return;
-    var marker = L.marker([c.lat, c.lng], { icon: markerIcon(c), title: displayName(c) + " (" + c.month + ")" });
+    var marker = L.marker([c.lat, c.lng], { icon: markerIcon(c), title: markerTitle(c) });
     marker.bindPopup(function () { return buildPopup(c); }, { maxWidth: 300 });
     marker.on("click", function () { selectRank(c.rank, { scroll: true }); });
     markers.set(c.rank, marker);
@@ -409,7 +435,7 @@
       selectRank(c.rank, { scroll: false });
     });
     title.appendChild(rank);
-    title.appendChild(el("span", "svcd-name", displayName(c)));
+    title.appendChild(el("span", "svcd-name", shownName(c)));
     title.appendChild(badge(c.source));
     li.appendChild(title);
 
@@ -533,6 +559,24 @@
       if (c) box.checked = isChecked(c);
     });
     refresh(false);
+  }
+
+  // Sharing mode changed: re-render names and credits in the current list page, marker tooltips and
+  // any open popup. Filters, page, checked marks and the map view stay as they are.
+  function setSharing(value) {
+    sharing = !!value;
+    if (sharingBox) sharingBox.checked = sharing;
+    if (sharingBadge) sharingBadge.hidden = !sharing;
+    markers.forEach(function (marker, rank) {
+      var title = markerTitle(byRank.get(rank));
+      marker.options.title = title;
+      var node = marker.getElement ? marker.getElement() : null;
+      if (node) node.title = title;
+      if (marker.isPopupOpen && marker.isPopupOpen()) marker.getPopup().update();
+    });
+    var scroll = list.scrollTop;
+    renderList();
+    list.scrollTop = scroll;
   }
 
   function selectRank(rank, opts) {
@@ -672,6 +716,7 @@
   importBtn.addEventListener("click", function () { importFile.value = ""; importFile.click(); });
   importFile.addEventListener("change", function () { importChecked(importFile.files && importFile.files[0]); });
   clearBtn.addEventListener("click", clearChecked);
+  if (sharingBox) sharingBox.addEventListener("change", function () { setSharing(sharingBox.checked); });
   prevBtn.addEventListener("click", function () { page -= 1; renderList(); });
   nextBtn.addEventListener("click", function () { page += 1; renderList(); });
   window.addEventListener("hashchange", fromHash);
@@ -692,6 +737,8 @@
   setRadio("svcd-source", "all");
   setRadio("svcd-checked", "all");
   filterInput.value = "";
+  if (sharingBox) sharingBox.checked = false;  // sharing mode is per view: off after every reload
+  if (sharingBadge) sharingBadge.hidden = true;
   setOpen(!isNarrow());
   refresh(true);
   if (!fromHash() && markers.size) {

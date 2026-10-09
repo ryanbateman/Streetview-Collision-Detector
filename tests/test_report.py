@@ -239,6 +239,15 @@ def testBuildMapProvenanceAndCheckedState(tmp_path):
     assert "setLatLngs" in page
 
 
+def testBuildMapHasSharingMode(tmp_path):
+    path = tmp_path / "map.html"
+    buildMap([makeCandidate(1, 0.3, name=None), makeUserCandidate(2, 0.2)], path)
+    page = path.read_text(encoding="utf-8")
+    for text in ("Sharing mode", 'id="svcd-sharing"', 'id="svcd-sharing-badge"', "Unknown location",
+                 "Contributor hidden"):
+        assert text in page
+
+
 def testBuildMapEmptyHasNoHeatLayer(tmp_path):
     path = tmp_path / "map.html"
     buildMap([], path)

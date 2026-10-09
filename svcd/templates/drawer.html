@@ -3,6 +3,7 @@
   <header>
     <div class="svcd-head-row">
       <h1 id="svcd-count">__SVCD_COUNT_TEXT__</h1>
+      <span class="svcd-badge svcd-sharing-badge" id="svcd-sharing-badge" title="Unnamed places and contributor credits are hidden" hidden>Sharing mode</span>
       <button type="button" class="svcd-btn" id="svcd-hide" aria-controls="svcd-drawer">Hide</button>
     </div>
     <p class="svcd-sub" id="svcd-status">Ranked by the chance that a Street View camera caught you.</p>
@@ -25,6 +26,9 @@
       <label><input type="radio" name="svcd-checked" value="unchecked"><span>Unchecked</span></label>
       <label><input type="radio" name="svcd-checked" value="checked"><span>Checked</span></label>
     </fieldset>
+    <label class="svcd-sharing" title="Hide unnamed places and contributor credits before taking a screenshot">
+      <input type="checkbox" id="svcd-sharing" autocomplete="off"> Sharing mode
+    </label>
     <div class="svcd-actions">
       <button type="button" class="svcd-btn" id="svcd-export">Export checked</button>
       <button type="button" class="svcd-btn" id="svcd-import">Import checked</button>

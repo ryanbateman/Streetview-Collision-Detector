@@ -70,6 +70,10 @@ body.svcd-open #svcd-drawer { transform: none; }
 .svcd-seg label:last-of-type span { border-radius: 0 4px 4px 0; }
 .svcd-seg input:checked + span { background: var(--svcd-accent); border-color: var(--svcd-accent); color: var(--svcd-bg); font-weight: 600; }
 .svcd-seg input:focus-visible + span { outline: 2px solid var(--svcd-accent); outline-offset: 1px; }
+.svcd-sharing { display: flex; width: fit-content; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; cursor: pointer; }
+.svcd-sharing input { margin: 0; }
+.svcd-sharing-badge { color: var(--svcd-user-fg); background: var(--svcd-user-bg); border-color: var(--svcd-user-border); }
+.svcd-sharing-badge[hidden] { display: none; }
 .svcd-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .svcd-actions .svcd-btn { font-size: 12px; padding: 3px 8px; }
 .svcd-note { color: var(--svcd-muted); font-size: 12px; margin: 4px 0 0; min-height: 0; }

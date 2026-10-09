@@ -97,6 +97,16 @@ out.partialNote = noteLabel.textContent;
 out.missingStore = plain(h.loadChecked(makeStorage()));
 out.blockedStore = h.loadChecked(makeStorage({}, true));
 
+// sharing mode: displayName masks unnamed places (the key is shown), displayCredit masks contributors
+const pathPlace = { name: null, placeKey: "path:52.5163,13.3777" };
+const coordPlace = { placeKey: "52.51631,13.37773" };
+const namedPlace = { name: "Fixture Park", placeKey: "52.51631,13.37773" };
+out.namesSharing = [pathPlace, coordPlace, namedPlace].map((p) => h.displayName(p, true));
+out.namesPlain = [pathPlace, coordPlace, namedPlace].map((p) => h.displayName(p, false));
+out.creditsSharing = ["\u00a9 Fixture Contributor 3", "\u00a9 Google", "Image: GOOGLE LLC", "", null]
+  .map((credit) => h.displayCredit(credit, true));
+out.creditsPlain = ["\u00a9 Fixture Contributor 3", "\u00a9 Google"].map((credit) => h.displayCredit(credit, false));
+
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -158,3 +168,13 @@ def test_load_checked_keeps_valid_entries_of_a_partly_invalid_store(results):
 def test_load_checked_handles_missing_and_blocked_storage(results):
     assert results["missingStore"] == {}
     assert results["blockedStore"] is None
+
+
+def test_display_name_masks_unnamed_place_keys_only_in_sharing_mode(results):
+    assert results["namesSharing"] == ["Unknown location", "Unknown location", "Fixture Park"]
+    assert results["namesPlain"] == ["path:52.5163,13.3777", "52.51631,13.37773", "Fixture Park"]
+
+
+def test_display_credit_masks_contributors_but_never_google(results):
+    assert results["creditsSharing"] == ["Contributor hidden", "\u00a9 Google", "Image: GOOGLE LLC", None, None]
+    assert results["creditsPlain"] == ["\u00a9 Fixture Contributor 3", "\u00a9 Google"]
